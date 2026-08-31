@@ -1,0 +1,7 @@
+interface:
+  display_name: "Coach refresh"
+  short_description: "Rafraîchit les données JIRA d'un projet et réécrit la synthèse coach à partir des données fraîches, sans régénérer le PPT"
+  default_prompt: "Utilise $coach-refresh pour : rafraîchit les données JIRA d'un projet et réécrit la synthèse coach à partir des données fraîches, sans régénérer le PPT"
+
+policy:
+  allow_implicit_invocation: true

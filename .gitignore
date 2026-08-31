@@ -1,0 +1,17 @@
+# Ce dépôt est le répertoire de données privé (jamais publié) — voir CLAUDE.md.
+# project.yaml et contexte/*.md restent versionnés ici (historique utile),
+# seuls les secrets et les fichiers générés sont ignorés.
+
+.env
+projects
+contexte
+
+# Verrous PowerPoint temporaires
+~$*.pptx
+
+__pycache__/
+*.pyc
+
+# Pointeur local du skill vers ce répertoire de données (voir
+# skills/jira-report/scripts/workspace.py) — spécifique à chaque poste.
+skills/jira-report/.data-dir-path

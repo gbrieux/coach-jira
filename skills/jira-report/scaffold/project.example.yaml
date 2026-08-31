@@ -1,0 +1,39 @@
+# Un fichier project.yaml par projet, dans projects/<clé>/project.yaml.
+# <clé> (le nom du dossier) est l'identifiant utilisé partout : fetch_jira.py <clé>,
+# build_ppt.py <clé>, /report-refresh <clé>, etc. — libre, mais stable dans le temps.
+#
+# Champs obligatoires :
+name: "Nom lisible du projet"          # affiché sur les slides
+team_id: "EQUIPE"                      # résout contexte/<team_id>.md — sensible à la casse,
+                                        # jamais deviné à partir du nom du projet ; plusieurs
+                                        # projets peuvent partager le même team_id
+jql: 'project = XXX AND ...'           # la requête JIRA qui définit le périmètre de ce projet
+
+# Champs optionnels (valeurs par défaut ci-dessous si omis) :
+# board_id: 123                        # ID du board Agile (URL Jira : .../boards/123) —
+                                        # requis pour les dates de sprint (burnup/burndown/vélocité)
+# sprint_start_date: "2026-01-01"      # ignore les sprints antérieurs à cette date
+# sprint_duration_days: 21             # durée calendaire d'un sprint, pour la projection burnup
+# sprint_field: customfield_10020      # champ Sprint (défaut Jira Cloud)
+# story_points_field: customfield_10016
+# started_status: "In Progress"        # statut = travail démarré
+# done_statuses: ["Done", "Terminé", "Terminé(e)", "Closed"]
+# us_types: ["User Story", "Story"]    # types comptés comme US (burnup/burndown/vélocité/cycle time)
+# seconds_per_day: 28800               # 8h ; ajuster si vos jours-homme sont sur une autre base
+# workflow:                            # statuts JIRA ordonnés (bac à sable -> terminé), pour que
+#   - "Bac à sable"                    # {{chart:status}} suive le workflow réel plutôt que la
+#   - "À faire"                        # fréquence. Reprendre les statuts exacts de votre projet,
+#   - "En cours"                       # dans l'ordre de votre workflow JIRA. Vide/absent = tri par
+#   - "Terminé(e)"                     # fréquence décroissante (comportement par défaut). Requis
+#                                       # (non vide) pour {{chart:cumulative_flow_diagram}}.
+# cfd:                                 # config optionnelle du CFD seul (n'affecte pas {{chart:status}}) :
+#   groups:                            # regroupe plusieurs statuts de `workflow` en une bande —
+#     "À faire":                       # utile quand `workflow` compte beaucoup d'étapes (peu lisible
+#       - "Bac à sable"                # en bandes empilées). Absent = une bande par statut de
+#       - "À faire"                    # `workflow` (comportement par défaut).
+#     "En cours":
+#       - "En cours"
+#     "Terminé":
+#       - "Terminé(e)"
+#   start_date: "2026-01-01"           # bornes de dates affichées (YYYY-MM-DD). Absent = première
+#   end_date: "2026-08-27"             # US créée -> aujourd'hui (comportement par défaut).

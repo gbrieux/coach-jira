@@ -1,0 +1,7 @@
+interface:
+  display_name: "Coach ppt"
+  short_description: "Génère le PPT d'indicateurs enrichi (données JIRA + contexte équipe) pour un projet"
+  default_prompt: "Utilise $coach-ppt pour : génère le PPT d'indicateurs enrichi (données JIRA + contexte équipe) pour un projet"
+
+policy:
+  allow_implicit_invocation: true

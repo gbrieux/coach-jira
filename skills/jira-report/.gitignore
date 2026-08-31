@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+
+# Pointeur vers le répertoire de données choisi au bootstrap — spécifique à
+# chaque poste, jamais versionné (voir scripts/workspace.py).
+.data-dir-path

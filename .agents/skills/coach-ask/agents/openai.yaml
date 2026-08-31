@@ -1,0 +1,7 @@
+interface:
+  display_name: "Coach ask"
+  short_description: "Répond à une question précise sur un projet ou une équipe, à partir des données JIRA et du contexte — sans générer de PPT"
+  default_prompt: "Utilise $coach-ask pour : répond à une question précise sur un projet ou une équipe, à partir des données JIRA et du contexte — sans générer de PPT"
+
+policy:
+  allow_implicit_invocation: true

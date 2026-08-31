@@ -1,0 +1,6 @@
+requests
+pyyaml
+python-dotenv
+python-pptx
+pywin32; platform_system == "Windows"  # QA visuel local (scripts/render_slides_windows.py)
+pytest
