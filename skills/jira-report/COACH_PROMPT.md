@@ -22,7 +22,8 @@ prompt, puis les écrire dans le JSON sous la clé `coaching` — un **objet**
   "velocity_lecture": "…",
   "types_lecture": "…",
   "cycle_time_lecture": "…",
-  "conso_corrective_lecture": "…"
+  "conso_corrective_lecture": "…",
+  "tempo_conso_lecture": "…"
 }
 ```
 
@@ -125,7 +126,7 @@ Pour faire le recommandation , appuie toi sur les fichiers  de contexte du proje
 Elle permette d'avoir une vision plus fine du contexte avant de donner des reco.
 Fini ta reco pas une simple question de coach agile si pertinent.
 
-## Autres slides (les 5 derniers champs — 1 à 2 phrases chacun)
+## Autres slides (les 6 derniers champs — 1 à 2 phrases chacun)
 
 - `burndown_lecture` (slide 3) : la courbe réelle décroche-t-elle de l'idéale,
   dans quel sens ?
@@ -136,6 +137,10 @@ Fini ta reco pas une simple question de coach agile si pertinent.
   anomalie/incident augmente-t-elle ou diminue-t-elle sur les derniers mois ?
   Ne pas commenter si `anomaly_types`/`incident_types` sont vides dans
   `project.yaml` (charge corrective alors toujours à 0%, rien à interpréter).
+- `tempo_conso_lecture` (`{{chart:tempo_conso}}`) : la conso Tempo suit-elle
+  le nb d'US terminées sprint à sprint, ou décroche-t-elle (conso qui monte
+  sans US terminées en face, ou l'inverse) ? Ne pas commenter si absent des
+  données (Tempo non installée sur ce projet).
 
 ## Proposer un ajout de contexte
 

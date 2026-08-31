@@ -46,6 +46,12 @@ BASE_URL = os.environ.get("JIRA_BASE_URL", "").rstrip("/")
 EMAIL = os.environ.get("JIRA_EMAIL", "")
 TOKEN = os.environ.get("JIRA_API_TOKEN", "")
 
+# Tempo (app JIRA de CRA/timesheet) : API séparée (api.tempo.io), token dédié
+# — absent (.env) sur les instances qui n'ont pas Tempo installé, voir
+# fetch_tempo_worklogs() et indicators/tempo_conso.py.
+TEMPO_TOKEN = os.environ.get("TEMPO_API_TOKEN", "")
+TEMPO_API_URL = "https://api.tempo.io/4/worklogs"
+
 # 1 jour-homme = 8h = 28800 s (paramétrable par projet via seconds_per_day)
 DEFAULTS = {
     "sprint_field": "customfield_10020",
@@ -282,6 +288,43 @@ def build_epics(issues, conf):
     }
 
 
+# ------------------------------------------------------------------ tempo
+def fetch_tempo_worklogs(issue_ids, date_from, date_to):
+    """Récupère les worklogs Tempo (jh, CRA) des tickets du périmètre JQL
+    (`issue_ids`, ids JIRA numériques), entre `date_from`/`date_to`
+    (YYYY-MM-DD). `None` si Tempo n'est pas configuré (`TEMPO_API_TOKEN`
+    absent de `.env`) ou si l'appel échoue (app absente/inaccessible sur
+    cette instance) — dans ce cas {{chart:tempo_conso}} affiche un message
+    plutôt qu'un graphique vide, voir indicators/tempo_conso.py.
+
+    L'API Tempo Cloud (api.tempo.io) n'a pas d'endpoint « worklogs d'une
+    liste d'issues » : on récupère tous les worklogs de la période (paginé
+    via `metadata.next`) et on filtre côté client sur les ids du périmètre
+    — raisonnable, la période est déjà bornée par `sprint_start_date`."""
+    if not TEMPO_TOKEN or not issue_ids:
+        return None
+    wanted = {str(i) for i in issue_ids}
+    headers = {"Authorization": f"Bearer {TEMPO_TOKEN}", "Accept": "application/json"}
+    out = []
+    url = TEMPO_API_URL
+    params = {"limit": 1000, "from": date_from, "to": date_to}
+    try:
+        while url:
+            r = requests.get(url, headers=headers, params=params, timeout=30)
+            if r.status_code != 200:
+                return None
+            data = r.json()
+            for w in data.get("results", []):
+                issue_id = str((w.get("issue") or {}).get("id", ""))
+                if issue_id in wanted:
+                    out.append({"date": w.get("startDate"), "seconds": w.get("timeSpentSeconds") or 0})
+            url = (data.get("metadata") or {}).get("next")
+            params = None  # 'next' porte déjà tous les paramètres de requête
+    except requests.RequestException:
+        return None
+    return out
+
+
 # ---------------------------------------------------------------- metrics
 def build_metrics(issues, sprints, conf):
     """Assemble les métriques de base (comptages globaux, épics, tableau des
@@ -336,6 +379,14 @@ def process(key, conf, s):
         print(f"[{key}] aucun sprint daté ne respecte sprint_start_date")
     else:
         print(f"[{key}] pas de board_id -> burnup/vélocité sans dates de sprint")
+
+    date_from = conf.get("sprint_start_date") or "2000-01-01"
+    date_to = _datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    conf["tempo_worklogs"] = fetch_tempo_worklogs([it["id"] for it in issues], date_from, date_to)
+    if conf["tempo_worklogs"] is None:
+        print(f"[{key}] Tempo: pas de données (token absent de .env, ou app Tempo indisponible sur ce projet)")
+    else:
+        print(f"[{key}] Tempo: {len(conf['tempo_worklogs'])} worklog(s) dans le périmètre")
 
     metrics = build_metrics(issues, sprints, conf)
     out = {

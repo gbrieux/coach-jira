@@ -1786,6 +1786,80 @@ def render_conso_corrective(slide, placeholder_shape, data, template_path, page_
     SH.add_footer(slide, project_name, page_num, total_pages)
 
 
+# ============================================================ tempo_conso
+def render_tempo_conso(slide, placeholder_shape, data, template_path, page_num, total_pages):
+    m = data["metrics"]
+    project_name = data["project_name"].strip()
+    SH.clear_legacy_chrome(slide)
+    SH.clear_placeholder(placeholder_shape)
+
+    tc = m.get("tempo_conso")
+    if not tc:
+        SH.add_header(slide, "TEMPO", "Conso Tempo (CRA) par sprint vs US terminées", template_path)
+        SH.add_text(slide, S.MARGIN_X, S.CONTENT_Y + 40, S.CONTENT_W, 100,
+                    "Données Tempo JIRA non disponibles (application Tempo absente de ce "
+                    "projet, ou TEMPO_API_TOKEN non configuré dans .env).",
+                    size=S.SIZE_BODY, color=S.TEXT_SECONDARY)
+        SH.add_footer(slide, project_name, page_num, total_pages)
+        return
+
+    surtitre = f"{_fr_num(tc['total_conso_jh'])} JH TEMPO · {tc['total_done_us']} US TERMINÉES"
+    SH.add_header(slide, surtitre, "Conso Tempo (CRA) par sprint vs US terminées", template_path)
+
+    cats = tc["categories"]
+    cd = CategoryChartData()
+    cd.categories = cats
+    cd.add_series("Conso Tempo (jh)", tc["conso_jh"])
+    gf = slide.shapes.add_chart(XL_CHART_TYPE.COLUMN_CLUSTERED, S.px(S.MARGIN_X), S.px(S.CONTENT_Y),
+                                 S.px(CHART_W), S.px(S.CONTENT_H), cd)
+    chart = gf.chart
+    chart.has_title = False
+    x_frac, y_frac, w_frac, h_frac = 0.02, 0.03, 0.96, 0.78
+    _set_manual_plot_area(chart, x_frac, y_frac, w_frac, h_frac)
+
+    bar_s = chart.plots[0].series[0]
+    bar_s.format.fill.solid()
+    bar_s.format.fill.fore_color.rgb = S.BRAND_PRIMARY
+    bar_s.format.line.fill.background()
+
+    cat_ax = chart.category_axis
+    cat_ax.format.line.color.rgb = S.CARD_BORDER
+    cat_ax.tick_labels.font.size = Pt(9.5)
+    cat_ax.tick_labels.font.color.rgb = S.TEXT_FOOTER
+
+    val_ax = chart.value_axis
+    val_ax.has_major_gridlines = True
+    val_ax.major_gridlines.format.line.color.rgb = S.CARD_BORDER_INNER
+    val_ax.tick_labels.font.size = Pt(9.5)
+    val_ax.tick_labels.font.color.rgb = S.TEXT_FOOTER
+    val_ax.format.line.fill.background()
+
+    _add_secondary_axis(chart, cats, [
+        ("US terminées", tc["done_us"], "F04E23", 2.5, None),
+    ])
+
+    chart.has_legend = True
+    chart.legend.position = XL_LEGEND_POSITION.BOTTOM
+    chart.legend.include_in_layout = False
+    chart.legend.font.size = S.SIZE_LEGEND
+    chart.legend.font.color.rgb = S.TEXT_PRIMARY
+
+    # ------------------------------------------------------------ rail droit
+    y = S.CONTENT_Y
+    _card_stat(slide, RAIL_X, y, RAIL_W, 174, "CONSO TEMPO TOTALE",
+               f"{_fr_num(tc['total_conso_jh'])} jh", "tous sprints, y compris backlog")
+    y += 174 + 20
+    avg = tc["avg_jh_per_us"]
+    _card_stat(slide, RAIL_X, y, RAIL_W, 174, "MOYENNE / US",
+               f"{_fr_num(avg)} jh" if avg is not None else "n/a",
+               f"{tc['total_done_us']} US terminées au total")
+    y += 174 + 20
+    lecture = (data.get("coaching") or {}).get("tempo_conso_lecture", "")
+    _card_lecture(slide, RAIL_X, y, RAIL_W, S.CONTENT_H - 2 * (174 + 20), lecture)
+
+    SH.add_footer(slide, project_name, page_num, total_pages)
+
+
 def _label_width_px(text, size_pt):
     """Largeur approximative (en px de maquette) d'un label gras — pas de
     métrique de police réelle disponible ici, estimation par caractère avec

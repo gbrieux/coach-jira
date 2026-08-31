@@ -125,6 +125,12 @@ JIRA_API_TOKEN=xxxxxxxx
 Le token est un **API token Atlassian** (https://id.atlassian.com/manage-profile/security/api-tokens),
 utilisé en Basic Auth avec l'email.
 
+Optionnel — `TEMPO_NAME`/`TEMPO_API_TOKEN`, seulement pour `{{chart:tempo_conso}}`
+(voir table des indicateurs). Token Tempo dédié (Jira > Tempo > Settings >
+API Integration > API Tokens), distinct de `JIRA_API_TOKEN`. Absent = l'app
+Tempo n'étant pas installée sur tous les projets, l'indicateur affiche un
+message plutôt qu'un graphique — rien d'autre n'est affecté.
+
 ### `projects/<clé>/project.yaml` (un fichier par projet)
 
 Voir `scaffold/project.example.yaml` pour la liste complète des champs
@@ -160,6 +166,7 @@ pas les tâches techniques, sous-tâches, anomalies, etc.
 | Types de tickets (nb) | `{{chart:types}}` | count par type (tous types) |
 | Types de tickets (conso) | `{{chart:types_conso}}` | timespent en jh par type (tous types) |
 | Charge corrective (conso) | `{{chart:conso_corrective}}` | 100% empilé, jh consommés par mois (mois de `resolutiondate`) sur tickets terminés, ventilés en 4 catégories anomalie / incident / Us / US tech — mapping par type de ticket exact via `anomaly_types`/`incident_types`/`tech_types`/`us_types` (config). Ticket terminé dont le type n'est dans aucune des 4 listes : exclu du graphique (pas de 5e bucket "Autre"). |
+| Conso Tempo vs US terminées | `{{chart:tempo_conso}}` | barres : conso Tempo (jh, worklogs agrégés par sprint via leur date de log) ; ligne (axe secondaire) : nb d'US terminées par sprint. Nécessite Tempo installé sur le projet **et** `TEMPO_API_TOKEN`/`TEMPO_NAME` dans `.env` (voir « Configuration ») — absent des deux : message "Données Tempo JIRA non disponibles" à la place du graphique, jamais de graphique vide. |
 | Cycle time (US) | `{{chart:cycle_time}}` | P15 / médiane / moyenne / P85 |
 | Répartition par nombre de sprints (US) | `{{chart:sprint_spread}}` | US terminées, groupées par nombre de sprints distincts traversés (champ Sprint JIRA) — dégradé clair (1 sprint) -> foncé (le plus de sprints). US sans sprint renseigné exclues (rien à mesurer). |
 | Tableau des sprints (US) | `{{liste_sprints}}` | table native : ajouts/terminés par sprint, cumuls (nb + jh) |
@@ -292,6 +299,33 @@ racine du skill.
 
 ## Historique / suivi
 
+- `{{chart:tempo_conso}}` ajouté (`indicators/tempo_conso.py`,
+  `render_agile.render_tempo_conso`, `fetch_jira.py:fetch_tempo_worklogs`) :
+  barres = conso Tempo (jh) par sprint, ligne (axe secondaire) = nb d'US
+  terminées par sprint (rollup réutilisé tel quel depuis
+  `indicators.burnup._build_rollup`, pas recalculé). API Tempo Cloud
+  (`api.tempo.io/4/worklogs`, token dédié `TEMPO_API_TOKEN`/`TEMPO_NAME` dans
+  `.env`) séparée de l'API Jira — pas d'endpoint « worklogs d'une liste
+  d'issues » côté Tempo, donc `fetch_tempo_worklogs` récupère tous les
+  worklogs de la période (bornée par `sprint_start_date`, paginée via
+  `metadata.next`) et filtre côté client sur les ids du périmètre JQL.
+  `conf["tempo_worklogs"]` (calculé une fois dans `fetch_jira.py:process`,
+  pas un champ `project.yaml`) vaut `None` si le token est absent ou l'appel
+  échoue (Tempo non installée sur ce projet) — dans ce cas l'indicateur
+  affiche un message plutôt qu'un graphique vide, comme le CFD sans
+  `workflow`. Piège rencontré : `startDate` d'un worklog Tempo est une date
+  sans heure/fuseau ("YYYY-MM-DD") — comparée telle quelle aux dates JIRA
+  (toujours "aware", suffixe `Z`) via `sprint_date_bucket`, ça lève
+  `TypeError: can't compare offset-naive and offset-aware datetimes` ; fixé
+  en complétant `T00:00:00Z` avant `parse_dt`.
+- Le logo d'en-tête (`shapes.add_header`/`render_agile._dark_header`) est
+  devenu **entièrement optionnel** : `logo_media` (nom du fichier dans
+  `ppt/media/` de `template.pptx`) vaut `None` par défaut sur tous les
+  appels du skill — aucun logo n'est requis dans `template.pptx`. Avant ce
+  changement, un nom de média hardcodé (`"image3.png"`) était systématiquement
+  recherché et son absence faisait planter tout `build_ppt.py` (`KeyError`
+  dans `shapes.template_image_bytes`) ; `template_image_bytes` renvoie
+  désormais `None` si le média manque, plutôt que de lever une exception.
 - `{{chart:conso_corrective}}` ajouté (`indicators/conso_corrective.py`,
   `render_agile.render_conso_corrective`) : 100% empilé, jh consommés par mois
   (mois de `resolutiondate`) sur tickets terminés, en 4 catégories anomalie /
