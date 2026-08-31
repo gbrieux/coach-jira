@@ -21,7 +21,8 @@ prompt, puis les écrire dans le JSON sous la clé `coaching` — un **objet**
   "burndown_lecture": "…",
   "velocity_lecture": "…",
   "types_lecture": "…",
-  "cycle_time_lecture": "…"
+  "cycle_time_lecture": "…",
+  "conso_corrective_lecture": "…"
 }
 ```
 
@@ -124,13 +125,17 @@ Pour faire le recommandation , appuie toi sur les fichiers  de contexte du proje
 Elle permette d'avoir une vision plus fine du contexte avant de donner des reco.
 Fini ta reco pas une simple question de coach agile si pertinent.
 
-## Autres slides (les 4 derniers champs — 1 à 2 phrases chacun)
+## Autres slides (les 5 derniers champs — 1 à 2 phrases chacun)
 
 - `burndown_lecture` (slide 3) : la courbe réelle décroche-t-elle de l'idéale,
   dans quel sens ?
 - `velocity_lecture` (slide 5) : régularité de la vélocité sprint à sprint.
 - `types_lecture` (slide 7) : lecture sur la répartition des types de tickets.
 - `cycle_time_lecture` (slide 9) : lecture sur l'écart moyenne/médiane.
+- `conso_corrective_lecture` (`{{chart:conso_corrective}}`) : la part
+  anomalie/incident augmente-t-elle ou diminue-t-elle sur les derniers mois ?
+  Ne pas commenter si `anomaly_types`/`incident_types` sont vides dans
+  `project.yaml` (charge corrective alors toujours à 0%, rien à interpréter).
 
 ## Proposer un ajout de contexte
 

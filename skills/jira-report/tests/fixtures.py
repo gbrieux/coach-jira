@@ -8,6 +8,9 @@ DEFAULT_CONF = {
     "seconds_per_day": 28800,
     "done_statuses": ["Done", "Terminé", "Terminé(e)", "Closed", "Resolved", "Fermé(e)"],
     "us_types": ["User Story", "Story"],
+    "anomaly_types": [],
+    "incident_types": [],
+    "tech_types": [],
     "sprint_duration_days": 21,
 }
 

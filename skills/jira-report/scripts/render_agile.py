@@ -1696,6 +1696,96 @@ def render_types_conso(slide, placeholder_shape, data, template_path, page_num, 
     SH.add_footer(slide, project_name, page_num, total_pages)
 
 
+# ======================================================== conso_corrective
+def render_conso_corrective(slide, placeholder_shape, data, template_path, page_num, total_pages):
+    m = data["metrics"]
+    project_name = data["project_name"].strip()
+    SH.clear_legacy_chrome(slide)
+    SH.clear_placeholder(placeholder_shape)
+
+    cc = m.get("conso_corrective")
+    if not cc:
+        SH.add_header(slide, "AUCUNE DONNÉE", "Charge corrective (anomalie / incident)", template_path)
+        SH.add_text(slide, S.MARGIN_X, S.CONTENT_Y + 40, S.CONTENT_W, 100,
+                    "Aucun ticket terminé avec date de résolution et jours-homme consommés "
+                    "dans les catégories anomalie / incident / Us / US tech (anomaly_types, "
+                    "incident_types, tech_types, us_types dans project.yaml).",
+                    size=S.SIZE_BODY, color=S.TEXT_SECONDARY)
+        SH.add_footer(slide, project_name, page_num, total_pages)
+        return
+
+    surtitre = f"{_fr_num(cc['corrective_pct'], 0)} % CORRECTIF · {_fr_num(cc['total_jh'])} JH"
+    SH.add_header(slide, surtitre, "Charge consommée sur tickets terminés, par mois", template_path)
+
+    ORDER = ["anomalie", "incident", "us", "us_tech"]
+    LABELS = {"anomalie": "Conso anomalie", "incident": "Conso incident",
+              "us": "Conso Us", "us_tech": "Conso US tech"}
+    COLORS = {"anomalie": S.CORRECTIVE_ANOMALY, "incident": S.CORRECTIVE_INCIDENT,
+              "us": S.CORRECTIVE_US, "us_tech": S.CORRECTIVE_TECH}
+
+    cd = CategoryChartData()
+    cd.categories = cc["categories"]
+    for cat in ORDER:
+        cd.add_series(LABELS[cat], cc["series"][cat])
+
+    gf = slide.shapes.add_chart(XL_CHART_TYPE.COLUMN_STACKED_100, S.px(S.MARGIN_X), S.px(S.CONTENT_Y),
+                                 S.px(CHART_W), S.px(S.CONTENT_H), cd)
+    chart = gf.chart
+    chart.has_title = False
+    x_frac, y_frac, w_frac, h_frac = 0.02, 0.03, 0.96, 0.80
+    _set_manual_plot_area(chart, x_frac, y_frac, w_frac, h_frac)
+
+    for ser, cat in zip(chart.plots[0].series, ORDER):
+        ser.format.fill.solid()
+        ser.format.fill.fore_color.rgb = COLORS[cat]
+        ser.format.line.fill.background()
+
+    chart.has_legend = True
+    chart.legend.position = XL_LEGEND_POSITION.BOTTOM
+    chart.legend.include_in_layout = False
+    chart.legend.font.size = S.SIZE_LEGEND
+    chart.legend.font.color.rgb = S.TEXT_PRIMARY
+
+    cat_ax = chart.category_axis
+    cat_ax.format.line.color.rgb = S.CARD_BORDER
+    cat_ax.tick_labels.font.size = Pt(9.5)
+    cat_ax.tick_labels.font.color.rgb = S.TEXT_FOOTER
+    skip = max(1, round(len(cc["categories"]) / 20))
+    ax_el = cat_ax._element
+    tls = ax_el.find(qn("c:tickLblSkip"))
+    if tls is None:
+        tls = ax_el.makeelement(qn("c:tickLblSkip"), {})
+        ax_el.append(tls)
+    tls.set("val", str(skip))
+
+    val_ax = chart.value_axis
+    val_ax.has_major_gridlines = True
+    val_ax.major_gridlines.format.line.color.rgb = S.CARD_BORDER_INNER
+    val_ax.tick_labels.font.size = Pt(9.5)
+    val_ax.tick_labels.font.color.rgb = S.TEXT_FOOTER
+    val_ax.tick_labels.number_format = "0%"
+    val_ax.tick_labels.number_format_is_linked = False
+    val_ax.format.line.fill.background()
+
+    # ------------------------------------------------------------ rail droit
+    y = S.CONTENT_Y
+    _card_stat(slide, RAIL_X, y, RAIL_W, 174, "CHARGE CORRECTIVE",
+               f"{_fr_num(cc['corrective_pct'], 0)} %",
+               f"{_fr_num(cc['corrective_jh'])} jh anomalie + incident")
+    y += 174 + 20
+    _card_stat(slide, RAIL_X, y, RAIL_W, 174, "TOTAL CONSOMMÉ",
+               f"{_fr_num(cc['total_jh'])} jh", "sur tickets terminés, 4 catégories")
+    y += 174 + 20
+    lecture = (data.get("coaching") or {}).get("conso_corrective_lecture", "")
+    if lecture:
+        rail_rest_h = S.CONTENT_H - 174 * 2 - 40
+        SH.add_rounded_rect(slide, RAIL_X, y, RAIL_W, rail_rest_h)
+        SH.add_text(slide, RAIL_X + 20, y + 20, RAIL_W - 40, rail_rest_h - 40,
+                    lecture, size=S.SIZE_BODY, color=S.TEXT_SECONDARY)
+
+    SH.add_footer(slide, project_name, page_num, total_pages)
+
+
 def _label_width_px(text, size_pt):
     """Largeur approximative (en px de maquette) d'un label gras — pas de
     métrique de police réelle disponible ici, estimation par caractère avec
@@ -1971,21 +2061,25 @@ def render_cover(slide, data):
 COACH_OVERFLOW_CHARS = 2000
 
 
-def _dark_header(slide, surtitre, titre, template_path):
+def _dark_header(slide, surtitre, titre, template_path, logo_media=None):
+    """`logo_media` optionnel, voir `shapes.add_header` — la pastille blanche
+    n'est dessinée que si un logo est effectivement trouvé."""
     SH.add_text(slide, S.MARGIN_X, S.MARGIN_TOP, S.CONTENT_W - S.LOGO_WIDTH_PX - 20, 26,
                 surtitre, size=S.SIZE_SURTITLE, color=S.SYNTH_ACCENT, bold=True,
                 all_caps=True, letter_spacing_pt=1.2)
     SH.add_text(slide, S.MARGIN_X, S.MARGIN_TOP + 33, S.CONTENT_W - S.LOGO_WIDTH_PX - 20, 62,
                 titre, size=S.SIZE_SLIDE_TITLE, color=S.TEXT_WHITE, bold=True,
                 letter_spacing_pt=-0.3)
-    pastille_w, pastille_h = S.LOGO_WIDTH_PX + 26, 85
-    SH.add_rounded_rect(slide, S.MARGIN_X + S.CONTENT_W - pastille_w, S.MARGIN_TOP - 5,
-                         pastille_w, pastille_h, fill=S.TEXT_WHITE, line_color=None, radius_px=14)
-    slide.shapes.add_picture(
-        SH.template_image_bytes(template_path, "image3.png"),
-        S.px(S.MARGIN_X + S.CONTENT_W - pastille_w + 13), S.px(S.MARGIN_TOP + 15),
-        S.px(S.LOGO_WIDTH_PX),
-    )
+    logo_bytes = SH.template_image_bytes(template_path, logo_media) if logo_media else None
+    if logo_bytes is not None:
+        pastille_w, pastille_h = S.LOGO_WIDTH_PX + 26, 85
+        SH.add_rounded_rect(slide, S.MARGIN_X + S.CONTENT_W - pastille_w, S.MARGIN_TOP - 5,
+                             pastille_w, pastille_h, fill=S.TEXT_WHITE, line_color=None, radius_px=14)
+        slide.shapes.add_picture(
+            logo_bytes,
+            S.px(S.MARGIN_X + S.CONTENT_W - pastille_w + 13), S.px(S.MARGIN_TOP + 15),
+            S.px(S.LOGO_WIDTH_PX),
+        )
 
 
 def _dark_footer(slide, project_name, page_num, total_pages):

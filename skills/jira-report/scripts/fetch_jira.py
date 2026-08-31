@@ -53,6 +53,10 @@ DEFAULTS = {
     "seconds_per_day": 28800,
     "done_statuses": ["Done", "Terminé", "Terminé(e)", "Closed", "Resolved", "Fermé(e)"],
     "us_types": ["User Story", "Story"],   # types comptés comme US pour vélocité/cycle time
+    "anomaly_types": [],                    # types comptés comme "anomalie" pour {{chart:conso_corrective}}
+    "incident_types": [],                   # types comptés comme "incident" pour {{chart:conso_corrective}}
+    "tech_types": [],                       # types comptés comme "US tech" pour {{chart:conso_corrective}}
+                                             # (US techniques hors us_types, ex. Technical Story)
     "board_id": None,                       # requis pour dates/état des sprints
     "sprint_start_date": None,              # YYYY-MM-DD ; filtre les sprints plus anciens
     "sprint_duration_days": 21,             # durée calendaire d'un sprint, pour la projection burnup

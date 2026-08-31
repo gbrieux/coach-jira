@@ -96,31 +96,42 @@ def set_transparency(fill_or_shape, pct):
 
 
 _TEMPLATE_IMAGE_CACHE = {}
+_MISSING = object()
 
 
 def template_image_bytes(template_path, media_name):
     """Extrait un média (ex. 'image3.png') du .pptx source pour le
-    réutiliser (logo, fond de couverture) sans dupliquer les binaires."""
+    réutiliser (logo, fond de couverture) sans dupliquer les binaires.
+    `None` si ce média n'existe pas dans le fichier — un template n'a pas
+    à fournir de logo, voir `add_header`."""
     key = (str(template_path), media_name)
     if key not in _TEMPLATE_IMAGE_CACHE:
         with zipfile.ZipFile(template_path) as z:
-            _TEMPLATE_IMAGE_CACHE[key] = z.read(f"ppt/media/{media_name}")
-    return io.BytesIO(_TEMPLATE_IMAGE_CACHE[key])
+            try:
+                _TEMPLATE_IMAGE_CACHE[key] = z.read(f"ppt/media/{media_name}")
+            except KeyError:
+                _TEMPLATE_IMAGE_CACHE[key] = _MISSING
+    cached = _TEMPLATE_IMAGE_CACHE[key]
+    return io.BytesIO(cached) if cached is not _MISSING else None
 
 
-def add_header(slide, surtitre, titre, template_path, logo_media="image3.png"):
+def add_header(slide, surtitre, titre, template_path, logo_media=None):
+    """`logo_media` (ex. 'image3.png') est optionnel : un template n'a pas à
+    fournir de logo. Absent, ou média introuvable dans le fichier -> pas de
+    logo dessiné, le reste de l'en-tête (surtitre + titre) est inchangé."""
     add_text(slide, S.MARGIN_X, S.MARGIN_TOP, S.CONTENT_W - S.LOGO_WIDTH_PX - 20, 26,
               surtitre, size=S.SIZE_SURTITLE, color=S.BRAND_ACCENT, bold=True,
               all_caps=True, letter_spacing_pt=1.2)
     add_text(slide, S.MARGIN_X, S.MARGIN_TOP + 33, S.CONTENT_W - S.LOGO_WIDTH_PX - 20, 62,
               titre, size=S.SIZE_SLIDE_TITLE, color=S.BRAND_PRIMARY, bold=True,
               letter_spacing_pt=-0.3)
-    logo_h = S.LOGO_WIDTH_PX * 0.263  # ratio approx image3.png (230x60ish)
-    slide.shapes.add_picture(
-        template_image_bytes(template_path, logo_media),
-        S.px(S.MARGIN_X + S.CONTENT_W - S.LOGO_WIDTH_PX), S.px(S.MARGIN_TOP),
-        S.px(S.LOGO_WIDTH_PX),
-    )
+    logo_bytes = template_image_bytes(template_path, logo_media) if logo_media else None
+    if logo_bytes is not None:
+        slide.shapes.add_picture(
+            logo_bytes,
+            S.px(S.MARGIN_X + S.CONTENT_W - S.LOGO_WIDTH_PX), S.px(S.MARGIN_TOP),
+            S.px(S.LOGO_WIDTH_PX),
+        )
 
 
 def add_footer(slide, project_name, page_num, total_pages):

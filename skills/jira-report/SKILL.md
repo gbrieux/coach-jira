@@ -159,6 +159,7 @@ pas les tâches techniques, sous-tâches, anomalies, etc.
 | Cumulative Flow Diagram (US) | `{{chart:cumulative_flow_diagram}}` | bandes empilées, jour par jour, du nb d'US ayant atteint chaque statut du `workflow` configuré (ou un statut suivant) — nécessite `workflow` non vide dans `project.yaml` (contrairement à `{{chart:status}}`, pas de repli par fréquence : l'ordre doit refléter la vraie progression). Reconstruit à partir de l'historique des statuts (`changelog`, voir « Champs JIRA récupérés »). Regroupement des statuts et bornes de dates configurables via le bloc optionnel `cfd:` de `project.yaml` (voir `scaffold/project.example.yaml`) — utile quand `workflow` compte beaucoup d'étapes (bandes trop nombreuses pour rester lisibles). |
 | Types de tickets (nb) | `{{chart:types}}` | count par type (tous types) |
 | Types de tickets (conso) | `{{chart:types_conso}}` | timespent en jh par type (tous types) |
+| Charge corrective (conso) | `{{chart:conso_corrective}}` | 100% empilé, jh consommés par mois (mois de `resolutiondate`) sur tickets terminés, ventilés en 4 catégories anomalie / incident / Us / US tech — mapping par type de ticket exact via `anomaly_types`/`incident_types`/`tech_types`/`us_types` (config). Ticket terminé dont le type n'est dans aucune des 4 listes : exclu du graphique (pas de 5e bucket "Autre"). |
 | Cycle time (US) | `{{chart:cycle_time}}` | P15 / médiane / moyenne / P85 |
 | Répartition par nombre de sprints (US) | `{{chart:sprint_spread}}` | US terminées, groupées par nombre de sprints distincts traversés (champ Sprint JIRA) — dégradé clair (1 sprint) -> foncé (le plus de sprints). US sans sprint renseigné exclues (rien à mesurer). |
 | Tableau des sprints (US) | `{{liste_sprints}}` | table native : ajouts/terminés par sprint, cumuls (nb + jh) |
@@ -211,12 +212,16 @@ Placer le template dans `templates/template.pptx` (créé neutre par le bootstra
 à partir de `scaffold/template.pptx` — à remplacer par sa propre charte). Le
 skill **remplit les slides existantes** — il ne recrée pas la charte. Pour que le
 remplissage fonctionne, chaque zone cible du template doit contenir un
-placeholder texte `{{...}}` (voir table ci-dessus) ; le logo d'en-tête est
-extrait dynamiquement du template (`ppt/media/image3.png`) et la slide de
-couverture réutilise telle quelle l'image de fond et le bandeau logo déjà en
-place (`ppt/media/image1.jpeg` / `image2.png`) — remplacer ces trois images
-(même nom de fichier, même relation) suffit à rebrander sans toucher au reste
-de la structure.
+placeholder texte `{{...}}` (voir table ci-dessus).
+
+Aucun logo n'est requis : la slide de couverture réutilise telle quelle
+l'image de fond déjà en place (si elle existe) sans rien exiger de plus, et
+les en-têtes des slides de contenu (`shapes.add_header`, `render_agile._dark_header`)
+se dessinent sans logo tant qu'aucun n'est fourni. Un logo reste possible —
+`add_header`/`_dark_header` acceptent un `logo_media` (nom du fichier dans
+`ppt/media/` de `template.pptx`, ex. `"image3.png"`) et l'insèrent
+dynamiquement s'il existe, sans rien dessiner si le fichier est absent —
+mais rien dans le pipeline n'en dépend par défaut.
 
 `scripts/inspect_template.py` liste tous les placeholders détectés et les
 emplacements de graphiques attendus — le lancer une fois pour vérifier que le
@@ -287,6 +292,23 @@ racine du skill.
 
 ## Historique / suivi
 
+- `{{chart:conso_corrective}}` ajouté (`indicators/conso_corrective.py`,
+  `render_agile.render_conso_corrective`) : 100% empilé, jh consommés par mois
+  (mois de `resolutiondate`) sur tickets terminés, en 4 catégories anomalie /
+  incident / Us / US tech. Nouveaux champs `project.yaml` : `anomaly_types`,
+  `incident_types`, `tech_types` (listes de noms de type JIRA exacts,
+  `us_types` déjà existant réutilisé pour la catégorie "Us") — vides par
+  défaut, donc l'indicateur est présent mais toujours à 0% tant qu'ils ne sont
+  pas renseignés. Périmètre volontairement limité à ces 4 catégories (comme
+  les indicateurs US-scopés qui ignorent déjà tout type hors `us_types`) :
+  un ticket terminé dont le type n'apparaît dans aucune des 4 listes est
+  exclu du graphique, pas de 5e bucket "Autre". Bornes de mois affichées :
+  du mois de `sprint_start_date` (repris tel quel, pas de nouveau champ dédié)
+  jusqu'au mois courant, tous les mois intermédiaires inclus même vides.
+  Nouveau script réutilisable `scripts/duplicate_slide.py` (duplique une
+  slide de template.pptx à partir de son placeholder, renumérote les pages)
+  — voir CLAUDE.md, section « Ajouter un indicateur », pour la procédure
+  complète désormais suivie à chaque nouvel indicateur.
 - `{{chart:status}}` (`render_agile.render_status`) recoloré : dégradé clair
   -> foncé (au lieu d'une palette à 5 couleurs cycliques, qui pouvait donner
   la même couleur à deux statuts différents dès 6 statuts non-"attente" — cas

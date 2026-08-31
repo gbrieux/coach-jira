@@ -52,6 +52,12 @@ TREND_OPTIMIST = RGBColor(0x2E, 0x9E, 0x6B)
 TREND_MEDIAN = RGBColor(0xF0, 0x4E, 0x23)
 TREND_PESSIMIST = RGBColor(0xC0, 0x39, 0x2B)
 
+# {{chart:conso_corrective}} — 4 catégories anomalie/incident/Us/US tech
+CORRECTIVE_ANOMALY = RGBColor(0xC0, 0x39, 0x2B)   # rouge
+CORRECTIVE_INCIDENT = RGBColor(0x2E, 0x5A, 0x8C)  # bleu
+CORRECTIVE_US = RGBColor(0x2E, 0x9E, 0x6B)        # vert
+CORRECTIVE_TECH = RGBColor(0xE0, 0xB0, 0x2E)      # or
+
 SYNTH_BG = BRAND_PRIMARY  # slides de synthèse : fond plein bleu
 SYNTH_ACCENT = ORANGE_LIGHT
 SYNTH_RULE = RGBColor(0xFF, 0xFF, 0xFF)  # filet blanc à 14% d'opacité (alpha géré à l'appel)

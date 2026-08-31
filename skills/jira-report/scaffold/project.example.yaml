@@ -16,9 +16,15 @@ jql: 'project = XXX AND ...'           # la requête JIRA qui définit le périm
 # sprint_duration_days: 21             # durée calendaire d'un sprint, pour la projection burnup
 # sprint_field: customfield_10020      # champ Sprint (défaut Jira Cloud)
 # story_points_field: customfield_10016
-# started_status: "In Progress"        # statut = travail démarré
 # done_statuses: ["Done", "Terminé", "Terminé(e)", "Closed"]
-# us_types: ["User Story", "Story"]    # types comptés comme US (burnup/burndown/vélocité/cycle time)
+# us_types: ["User Story", "Story"]    # types comptés comme US (burnup/burndown/vélocité/cycle time,
+#                                       # statuts, cycle time, et catégorie "Us" de {{chart:conso_corrective}})
+# anomaly_types: ["Anomalie", "Bug"]   # catégorie "anomalie" de {{chart:conso_corrective}} — reprendre
+#                                       # les noms de type exacts de votre projet (ex. "Bug" si pas de
+#                                       # type "Anomalie" dédié). Vide/absent = catégorie toujours à 0.
+# incident_types: ["Incident"]         # catégorie "incident" de {{chart:conso_corrective}}. Même règle.
+# tech_types: ["Technical Story"]      # catégorie "US tech" de {{chart:conso_corrective}} — US techniques
+#                                       # hors us_types (ex. "Technical Story", "Story Technique"...).
 # seconds_per_day: 28800               # 8h ; ajuster si vos jours-homme sont sur une autre base
 # workflow:                            # statuts JIRA ordonnés (bac à sable -> terminé), pour que
 #   - "Bac à sable"                    # {{chart:status}} suive le workflow réel plutôt que la
