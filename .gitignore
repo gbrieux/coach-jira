@@ -5,7 +5,7 @@
 .env
 projects
 contexte
-
+templates
 # Verrous PowerPoint temporaires
 ~$*.pptx
 
