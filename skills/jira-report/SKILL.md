@@ -83,14 +83,26 @@ le détail des champs) — ne jamais inventer de token, de JQL ou de board_id.
    rédiger les textes en suivant `COACH_PROMPT.md`, puis les écrire dans le JSON
    sous la clé `coaching` (objet structuré — pas une chaîne, voir le prompt).
    **C'est Claude qui rédige en session — pas de script.** Alimente la slide
-   « Lecture du coach » et les 4 courtes légendes (burndown/vélocité/types/cycle
-   time). Si sautée, `build_ppt.py` s'exécute quand même : les cartes/légendes
+   « Lecture du coach », la slide « Décisions & questions » (`delta`/`questions`,
+   voir plus bas), et les courtes légendes de graphique (dont `epics_lecture`).
+   Si sautée, `build_ppt.py` s'exécute quand même : les cartes/légendes/slides
    concernées sont simplement absentes du rendu, rien ne casse. Sous
-   Windows/Codex, écrire l'objet dans un fichier JSON UTF-8 puis lancer
-   `python scripts/set_coaching.py <clé> <coaching_utf8.json>` ; ne jamais
-   transmettre un texte accentué avec `@'…'@ | python -`.
+   Windows/Codex, écrire l'objet dans un fichier JSON UTF-8, le valider avec
+   `python scripts/check_coaching.py <coaching_utf8.json>` (plafonds/cardinalités —
+   voir COACH_PROMPT.md, « Contraintes de rendu », seule source de vérité de ces
+   plafonds), puis l'injecter avec `python scripts/set_coaching.py <clé>
+   <coaching_utf8.json>` (qui applique de toute façon la même validation en
+   interne juste avant d'écrire) ; ne jamais transmettre un texte accentué avec
+   `@'…'@ | python -`.
 
-   Les étapes 2 à 4 (données + contexte + synthèse) sont regroupées dans
+   `data.json` étant réécrit en entier à chaque `fetch_jira.py`, la synthèse
+   précédente est perdue au refresh suivant si elle n'est pas archivée d'abord —
+   d'où `python scripts/coaching_history.py archive <clé>` **avant** l'étape 2, et
+   `python scripts/coaching_history.py last <clé>` pour retrouver la dernière
+   synthèse archivée (sert de base au champ `delta`). Voir
+   `scripts/coaching_history.py` (module) et COACH_PROMPT.md, étape 3.
+
+   Les étapes 1 à 4 (archive + données + contexte + synthèse) sont regroupées dans
    `/coach-refresh` : la synthèse est réécrite à chaque refresh, à partir des
    données qui viennent d'être rafraîchies, pas au moment du build.
 5. **Générer le PPT.** `python scripts/build_ppt.py <clé>` (ou `--all`) → lit le
@@ -170,9 +182,10 @@ pas les tâches techniques, sous-tâches, anomalies, etc.
 | Cycle time (US) | `{{chart:cycle_time}}` | P15 / médiane / moyenne / P85 |
 | Répartition par nombre de sprints (US) | `{{chart:sprint_spread}}` | US terminées, groupées par nombre de sprints distincts traversés (champ Sprint JIRA) — dégradé clair (1 sprint) -> foncé (le plus de sprints). US sans sprint renseigné exclues (rien à mesurer). |
 | Tableau des sprints (US) | `{{liste_sprints}}` | table native : ajouts/terminés par sprint, cumuls (nb + jh) |
-| Tableau des epics | `{{liste_epics}}` | table native : reste à faire théorique (jh) par epic |
+| Tableau des epics | `{{liste_epics}}` | table native : reste à faire théorique (jh) par epic ; bandeau légende (`coaching.epics_lecture`, optionnel) sous le tableau — tableau à hauteur réduite quand présent, hauteur d'origine sinon (jamais de trou) |
 | KPI cycle time | `{{kpi:*}}` | cartes de synthèse cycle time (voir placeholders texte ci-dessous) |
 | Synthèse du coach | `{{coach:synthese}}` | texte rédigé par Claude en session, voir `COACH_PROMPT.md` — conditionnel, sauté si absent du template |
+| Décisions & questions | `{{coach:decisions}}` | `coaching.delta` (ce qui a bougé depuis la synthèse précédente) et `coaching.questions` (2-3 questions de coach affichées sur la slide, distinctes des questions de session) — slide entièrement retirée du PPT si les deux sont absents, voir COACH_PROMPT.md |
 
 Placeholders texte : `{{project_name}}`, `{{project_key}}`, `{{date}}`, `{{jql}}`,
 `{{total_issues}}`, `{{total_story_points}}`, `{{avg_velocity}}`, `{{nb_sprints}}`,
@@ -299,6 +312,35 @@ racine du skill.
 
 ## Historique / suivi
 
+- `COACH_PROMPT.md` v2 : trois nouveaux champs `coaching` — `delta` (ce qui a
+  bougé depuis la synthèse précédente), `questions` (0-3 questions de coach
+  affichées sur une slide, distinctes des questions de session posées dans le
+  chat) et `epics_lecture` (légende de `{{liste_epics}}`, qui n'en avait
+  aucune). Nouveau script `scripts/coaching_history.py` (`archive`/`last`/
+  `list`) : `data.json` étant réécrit en entier à chaque `fetch_jira.py`, la
+  synthèse précédente doit être archivée à part (`projects/<clé>/output/
+  coaching_history.json`, jamais touché par `fetch_jira.py`) pour que `delta`
+  soit calculable — `archive` idempotent, purge au-delà de 12 entrées, tolère
+  un fichier d'historique corrompu (repart d'un historique vide plutôt que de
+  planter). Nouveau script `scripts/check_coaching.py` : valide les plafonds
+  de longueur et cardinalités d'un coaching avant injection (seule source de
+  vérité de ces plafonds : COACH_PROMPT.md, « Contraintes de rendu » — jamais
+  recopiés ailleurs), distingue erreurs bloquantes et avertissements,
+  importable (`validate_coaching`) et branché dans `set_coaching.py` juste
+  avant l'injection atomique — une synthèse qui casserait le rendu à
+  positions fixes est refusée à la source. Nouvelle slide « Décisions &
+  questions » (`{{coach:decisions}}`, `render_agile.render_coach_decisions`) :
+  rendue en deux colonnes (delta + questions) si `delta` est présent, en une
+  colonne (questions seules, géométrie des cartes de recommandation
+  réutilisée) sinon ; **retirée entièrement du PPT** (nouveau helper
+  `build_ppt._remove_slide`, pas d'API dédiée en python-pptx) si `delta` et
+  `questions` sont tous les deux absents — contrairement aux autres
+  indicateurs, qui affichent un message de repli plutôt que de disparaître.
+  Slide dupliquée dans les deux `template.pptx` (charte réelle + scaffold)
+  depuis la slide `{{coach:synthese}}` via `scripts/duplicate_slide.py`.
+  `/coach-refresh` archive désormais la synthèse en tout premier (avant le
+  `fetch_jira.py` qui écraserait `data.json`) et valide avec
+  `check_coaching.py` avant d'injecter.
 - `{{chart:tempo_conso}}` ajouté (`indicators/tempo_conso.py`,
   `render_agile.render_tempo_conso`, `fetch_jira.py:fetch_tempo_worklogs`) :
   barres = conso Tempo (jh) par sprint, ligne (axe secondaire) = nb d'US

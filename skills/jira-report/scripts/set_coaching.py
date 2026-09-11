@@ -11,10 +11,15 @@ causées par ``$OutputEncoding=us-ascii`` dans Windows PowerShell 5.1.
 import argparse
 import json
 import re
+import sys
 import tempfile
 from pathlib import Path
 
 from workspace import output_dir, DataDirNotConfigured
+from check_coaching import validate_coaching
+
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stderr.reconfigure(encoding="utf-8")
 
 
 def _iter_text_values(value):
@@ -65,6 +70,18 @@ def main():
     incoming = json.loads(args.coaching_json.read_text(encoding="utf-8-sig"))
     coaching = incoming.get("coaching") if isinstance(incoming, dict) and "coaching" in incoming else incoming
     validate(coaching)
+
+    errors, warnings = validate_coaching(coaching)
+    for w in warnings:
+        print(f"AVERTISSEMENT: {w}")
+    if errors:
+        for e in errors:
+            print(f"ERREUR: {e}", file=sys.stderr)
+        parser.error(
+            f"{len(errors)} erreur(s) de plafond/cardinalité — coaching non injecté "
+            "(voir scripts/check_coaching.py)."
+        )
+
     data["coaching"] = coaching
 
     with tempfile.NamedTemporaryFile(

@@ -35,8 +35,10 @@ répertoire de données, pas dans ce dossier — voir `SKILL.md`.
    - Si elle est déjà présente : ne pas la réécrire, passer à l'étape 4.
    - Si elle est absente (ex. premier build sans être passé par
      `/coach-refresh`) : la rédiger en suivant `COACH_PROMPT.md`, à partir des
-     données JIRA **et** du contexte résolu à l'étape 1, puis l'écrire avec :
+     données JIRA **et** du contexte résolu à l'étape 1, puis la valider et
+     l'écrire avec :
      ```bash
+     python scripts/check_coaching.py <coaching_utf8.json>
      python scripts/set_coaching.py $1 <coaching_utf8.json>
      ```
      Si la rédaction fait ressortir un fait qui mériterait d'être conservé dans

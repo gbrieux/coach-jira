@@ -17,6 +17,7 @@ from datetime import datetime
 import indicators
 import render_agile
 from pptx import Presentation
+from pptx.oxml.ns import qn
 
 from workspace import output_dir, template_path, list_project_keys, DataDirNotConfigured
 
@@ -25,6 +26,7 @@ CHART_PH = re.compile(r"\{\{chart:(\w+)\}\}")
 TABLE_PH = "{{liste_sprints}}"
 EPICS_PH = "{{liste_epics}}"
 COACH_PH = "{{coach:synthese}}"
+DECISIONS_PH = "{{coach:decisions}}"
 KPI_PH = "{{kpi:*}}"
 
 # {placeholder: render(slide, shape, data, template_path, page_num, total_pages)}
@@ -179,6 +181,21 @@ def replace_runs(tf, mapping):
                 r.text = ""
 
 
+def _remove_slide(prs, slide):
+    """Retire une slide du deck — pas d'API dédiée en python-pptx. Réservé à
+    {{coach:decisions}} quand ni `delta` ni `questions` ne sont renseignés :
+    dans ce cas la slide ne doit laisser aucune trace visuelle (voir
+    BRIEF_CLAUDE_CODE.md §6), contrairement aux autres indicateurs qui
+    affichent un message de repli plutôt que de disparaître."""
+    xml_slides = prs.slides._sldIdLst
+    for sld in list(xml_slides):
+        rId = sld.get(qn("r:id"))
+        if prs.part.rels[rId].target_part == slide.part:
+            xml_slides.remove(sld)
+            prs.part.drop_rel(rId)
+            return
+
+
 def process(key):
     try:
         TEMPLATE = template_path()
@@ -195,11 +212,24 @@ def process(key):
     if len(prs.slides) > 0:
         render_agile.render_cover(prs.slides[0], data)
 
+    # {{coach:decisions}} : slide retirée entièrement (avant la boucle
+    # principale, pour que la pagination dynamique des autres slides
+    # reflète tout de suite le compte réduit) si ni `delta` ni `questions`
+    # ne sont renseignés — jamais de slide creuse ou de trou visuel.
+    coaching = data.get("coaching") or {}
+    if not (coaching.get("delta") or coaching.get("questions")):
+        for slide in list(prs.slides):
+            for shape in slide.shapes:
+                if shape.has_text_frame and DECISIONS_PH in shape.text_frame.text:
+                    _remove_slide(prs, slide)
+                    break
+
     placed = []
     # Snapshot avant boucle : render_coach peut ajouter une slide (débordement
     # >2000 caractères) — itérer sur une liste figée évite de la revisiter.
     for slide in list(prs.slides):
-        chart_shapes, table_shapes, epics_shapes, coach_shapes, kpi_shapes = [], [], [], [], []
+        chart_shapes, table_shapes, epics_shapes = [], [], []
+        coach_shapes, decisions_shapes, kpi_shapes = [], [], []
         for shape in slide.shapes:
             if shape.has_text_frame:
                 mt = CHART_PH.search(shape.text_frame.text)
@@ -209,6 +239,8 @@ def process(key):
                     table_shapes.append(shape)
                 elif EPICS_PH in shape.text_frame.text:
                     epics_shapes.append(shape)
+                elif DECISIONS_PH in shape.text_frame.text:
+                    decisions_shapes.append(shape)
                 elif COACH_PH in shape.text_frame.text:
                     coach_shapes.append(shape)
                 elif KPI_PH in shape.text_frame.text:
@@ -245,6 +277,11 @@ def process(key):
                 print(f"[{key}] AVERTISSEMENT: coach:synthese demandé, pas de synthèse dans le JSON "
                       f"(clé 'coaching' absente — voir COACH_PROMPT.md)")
             placed.append("coach:synthese")
+
+        for shape in decisions_shapes:
+            page_num = list(prs.slides).index(slide) + 1
+            render_agile.render_coach_decisions(slide, shape, data, TEMPLATE, page_num, len(prs.slides))
+            placed.append("coach:decisions")
 
         for shape in slide.shapes:
             if shape.has_text_frame:

@@ -14,13 +14,25 @@ voir `SKILL.md`.
    `python scripts/bootstrap.py <chemin_choisi>`, puis reprendre à l'étape 1.
    Voir `SKILL.md`, section « Première utilisation ».
 
-1. **Données JIRA.**
+1. **Archiver la synthèse précédente — avant tout le reste.** `fetch_jira.py`
+   (étape suivante) réécrit `data.json` en entier, ce qui perdrait le `coaching`
+   actuel s'il n'est pas archivé d'abord (voir COACH_PROMPT.md, étape 3, pour le
+   `delta`) :
+   ```bash
+   python scripts/coaching_history.py archive $1
+   ```
+   Idempotent (ne réarchive pas un coaching identique au dernier déjà présent) et
+   sans effet si `data.json` n'a pas encore de `coaching` — ne jamais sauter cette
+   étape sous prétexte qu'elle semble inutile ce coup-ci.
+
+2. **Données JIRA.**
    ```bash
    python scripts/fetch_jira.py $1
    ```
-   (ou `python scripts/fetch_jira.py --all` si `$1` est absent ou vaut `--all`.)
+   (ou `python scripts/fetch_jira.py --all` si `$1` est absent ou vaut `--all` —
+   dans ce cas, répéter l'étape 1 pour chaque projet avant cette étape.)
 
-2. **Résoudre le contexte.**
+3. **Résoudre le contexte.**
    ```bash
    python scripts/resolve_context.py $1
    ```
@@ -30,20 +42,30 @@ voir `SKILL.md`.
    restent rafraîchies, mais pas de synthèse écrite sans contexte résolu.
 
    Si `$1` vaut `--all` ou est absent (refresh multi-projets), répéter les étapes
-   2 et 3 pour chaque projet de `projects/`.
+   1 à 4 pour chaque projet de `projects/`.
 
-3. **Synthèse coach.** Rédiger le contenu de la clé `coaching` (objet structuré) en
+4. **Synthèse coach.** Rédiger le contenu de la clé `coaching` (objet structuré) en
    suivant `COACH_PROMPT.md`, à partir des données JIRA qui viennent d'être
-   rafraîchies **et** du contexte résolu à l'étape 2 (`organisation.md` +
-   `contexte/<team_id>.md`). Montrer un résumé de ce qui va être écrit n'est pas
-   nécessaire ici (contrairement à un ajout dans `contexte/`) — mais si la
-   rédaction fait ressortir un fait qui mériterait d'être conservé dans le
+   rafraîchies, du contexte résolu à l'étape 3 (`organisation.md` +
+   `contexte/<team_id>.md`), et de la dernière synthèse archivée pour le `delta` :
+   ```bash
+   python scripts/coaching_history.py last $1
+   ```
+   (rien s'il n'y a pas encore d'historique — dans ce cas, ne pas produire le
+   champ `delta`, voir COACH_PROMPT.md). Montrer un résumé de ce qui va être écrit
+   n'est pas nécessaire ici (contrairement à un ajout dans `contexte/`) — mais si
+   la rédaction fait ressortir un fait qui mériterait d'être conservé dans le
    contexte équipe, suivre la section « Proposer un ajout de contexte » de
    `COACH_PROMPT.md` (proposer, attendre confirmation, jamais écrire en
-   silence). Écrire la synthèse avec :
+   silence). Valider puis écrire la synthèse avec :
    ```bash
+   python scripts/check_coaching.py <coaching_utf8.json>
    python scripts/set_coaching.py $1 <coaching_utf8.json>
    ```
+   `check_coaching.py` vérifie les plafonds/cardinalités (voir COACH_PROMPT.md,
+   « Contraintes de rendu ») avant d'écrire quoi que ce soit — une erreur bloquante
+   veut dire raccourcir le texte, pas forcer l'injection ; `set_coaching.py`
+   applique de toute façon la même validation en interne juste avant d'injecter.
 
 Ne pas lancer `build_ppt.py` — cette commande rafraîchit `projects/$1/output/data.json`
 (données + synthèse), rien d'autre. Pour générer le PPT à partir de ce JSON déjà

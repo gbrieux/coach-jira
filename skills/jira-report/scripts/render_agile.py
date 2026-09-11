@@ -1429,11 +1429,31 @@ def render_cfd(slide, placeholder_shape, data, template_path, page_num, total_pa
 EPIC_TABLE_HEADERS = ["ID", "Libellé", "Statut", "Estim.", "Conso", "RAF théo",
                       "US term.", "US restantes", "% avanc."]
 EPIC_TABLE_COL_FRACS = [0.09, 0.27, 0.11, 0.10, 0.10, 0.10, 0.08, 0.08, 0.07]
-# PowerPoint peut augmenter automatiquement la hauteur des lignes lorsque les
-# libellés d'EPIC sont longs. Garder sept lignes détaillées plus la synthèse
-# évite que le tableau ne déborde sur le bandeau et le pied de page.
-MAX_EPIC_ROWS = 8
+# PowerPoint traite la hauteur de ligne de table comme un minimum, pas un
+# maximum : un libellé d'EPIC long wrappé sur 2-3 lignes agrandit sa ligne au
+# rendu réel au-delà de row_h, quel que soit le calcul plus bas. Garder six
+# lignes détaillées plus la synthèse (au lieu de 7) laisse la marge
+# nécessaire pour ne pas déborder sur le pied de page avec des libellés
+# réels longs (vérifié visuellement par QA, voir CLAUDE.md « Ajouter un
+# indicateur »).
+MAX_EPIC_ROWS = 6
 SUCCESS_GREEN = S.TREND_OPTIMIST  # 2E9E6B, réutilisé comme vert de succès
+
+# Bandeau `epics_lecture` (voir BRIEF_CLAUDE_CODE.md §7) — pleine largeur,
+# géométrie fixe mesurée en pouces, convertie en px de maquette (1 in = 144 px
+# ici). Quand présent, le tableau reprend une hauteur réduite pour lui
+# laisser la place ; absent, le tableau garde sa hauteur d'origine (pas de
+# trou en bas de slide).
+EPIC_TABLE_H_WITH_LEGEND = 544  # 3.78 in
+EPIC_LEGEND_Y = 953             # 6.62 in
+EPIC_LEGEND_H = 60              # 0.42 in
+# PowerPoint traite la hauteur de ligne de table comme un minimum, pas un
+# maximum : un libellé d'EPIC long wrappé sur 3 lignes agrandit sa ligne au
+# rendu réel, quel que soit `row_h` calculé ici. Avec la légende juste en
+# dessous, moins de lignes affichées (donc plus de hauteur allouée par ligne)
+# réduit ce risque de dépassement — vérifié visuellement par QA, voir
+# CLAUDE.md « Ajouter un indicateur ».
+MAX_EPIC_ROWS_WITH_LEGEND = 5
 
 
 def _card_mini(slide, x, y, w, h, label, big, sub, fill=S.CARD_BG, border=S.CARD_BORDER,
@@ -1504,17 +1524,25 @@ def render_epics(slide, placeholder_shape, data, template_path, page_num, total_
                    "aucune US terminée")
 
     # --------------------------------------------------------------- tableau
+    epics_lecture = (data.get("coaching") or {}).get("epics_lecture", "")
     table_y = S.CONTENT_Y + card_h + gap
-    table_h = S.CONTENT_H - card_h - gap
+    table_h = EPIC_TABLE_H_WITH_LEGEND if epics_lecture else (S.CONTENT_H - card_h - gap)
+    header_h = 46
+    row_floor = 36
+    # Une légende réduit la hauteur dispo : réduire le nombre de lignes
+    # affichées plutôt que le bandeau (voir BRIEF_CLAUDE_CODE.md §7) — jamais
+    # de dépassement du cadre du tableau, ni vers le bandeau ni vers le pied
+    # de page.
+    max_rows = MAX_EPIC_ROWS_WITH_LEGEND if epics_lecture else MAX_EPIC_ROWS
+    max_rows = min(max_rows, max(int((table_h - header_h) // row_floor), 1))
 
     items = ep["items"]
-    truncated = len(items) > MAX_EPIC_ROWS
-    shown = items[:MAX_EPIC_ROWS - 1] if truncated else items
-    rest = items[MAX_EPIC_ROWS - 1:] if truncated else []
+    truncated = len(items) > max_rows
+    shown = items[:max_rows - 1] if truncated else items
+    rest = items[max_rows - 1:] if truncated else []
 
     n_rows = len(shown) + 1 + (1 if rest else 0)
-    header_h = 46
-    row_h = max((table_h - header_h) / (n_rows - 1), 36)
+    row_h = max((table_h - header_h) / (n_rows - 1), row_floor)
 
     tbl_shape = slide.shapes.add_table(n_rows, len(EPIC_TABLE_HEADERS),
                                         S.px(S.MARGIN_X), S.px(table_y),
@@ -1589,6 +1617,10 @@ def render_epics(slide, placeholder_shape, data, template_path, page_num, total_
         set_cell(r, 6, str(rest_done), color=S.TEXT_SECONDARY, fill=row_fill, align=PP_ALIGN.RIGHT)
         set_cell(r, 7, str(rest_remaining), color=S.TEXT_SECONDARY, fill=row_fill, align=PP_ALIGN.RIGHT)
         set_cell(r, 8, f"{_fr_num(rest_pct, 0)} %", color=S.TEXT_SECONDARY, fill=row_fill, align=PP_ALIGN.RIGHT)
+
+    if epics_lecture:
+        SH.add_text(slide, S.MARGIN_X, EPIC_LEGEND_Y, S.CONTENT_W, EPIC_LEGEND_H,
+                    epics_lecture, size=S.SIZE_BODY, color=S.TEXT_SECONDARY)
 
     SH.add_footer(slide, project_name, page_num, total_pages)
 
@@ -2288,6 +2320,89 @@ def _render_coach_slide(slide, project_name, template_path, page_num, total_page
             pad = S.CARD_PADDING_PX
             SH.add_text(slide, S.MARGIN_X + pad, ry + pad, left_w - 2 * pad, card_h - 2 * pad,
                         f"{i + 1}.  {text}", size=S.SIZE_BODY, color=S.TEXT_WHITE)
+
+    _dark_footer(slide, project_name, page_num, total_pages)
+
+
+# ======================================================= coach:decisions
+# Slide "Décisions & questions" — géométrie fixe mesurée en pouces (voir
+# BRIEF_CLAUDE_CODE.md §6), convertie en px de maquette (1 in = 144 px ici :
+# EMU/in = 914400, EMU/px = 6350, 914400/6350 = 144). Rendue uniquement si
+# `delta` ou `questions` est non vide (voir build_ppt.py, qui retire la
+# slide du deck sinon — jamais de trou visuel ni de slide creuse).
+DECISIONS_LABEL_Y = 217
+DECISIONS_LEFT_X = 109
+DECISIONS_LEFT_W = 798
+DECISIONS_DELTA_Y = 255
+DECISIONS_RIGHT_X = 946
+DECISIONS_RIGHT_W = 864
+DECISIONS_CARD_Y = 256
+DECISIONS_CARD_PAD_TOP = 39
+DECISIONS_ROW_H = 144
+DECISIONS_ROW_Y0 = 287
+DECISIONS_BADGE_X = 977
+DECISIONS_BADGE_W = 72
+DECISIONS_QTEXT_X = 1066
+DECISIONS_QTEXT_W = 714
+# Variante une colonne (delta absent) — géométrie des cartes de recommandation.
+DECISIONS_1COL_CARD_H = 101
+DECISIONS_1COL_ROW_H = 111
+DECISIONS_1COL_TEXT_X = 140
+DECISIONS_1COL_TEXT_W = 737
+
+
+def render_coach_decisions(slide, placeholder_shape, data, template_path, page_num, total_pages):
+    coaching = data.get("coaching") or {}
+    project_name = data["project_name"].strip()
+    SH.clear_legacy_chrome(slide)
+    SH.clear_placeholder(placeholder_shape)
+
+    delta = coaching.get("delta", "")
+    questions = (coaching.get("questions") or [])[:3]
+
+    SH.add_rect(slide, 0, 0, S.SLIDE_W_PX, S.SLIDE_H_PX, fill=S.SYNTH_BG, line_color=None)
+    _dark_header(slide, "SYNTHÈSE", "Décisions & questions", template_path)
+
+    if not (delta or questions):
+        SH.add_text(slide, S.MARGIN_X, S.CONTENT_Y + 40, S.CONTENT_W, 60,
+                    "Aucun delta ni question de coach pour ce run.",
+                    size=S.SIZE_BODY, color=S.TEXT_WHITE)
+        _dark_footer(slide, project_name, page_num, total_pages)
+        return
+
+    if delta:
+        SH.add_text(slide, DECISIONS_LEFT_X, DECISIONS_LABEL_Y, DECISIONS_LEFT_W, 26,
+                    "DEPUIS LE DERNIER POINT", size=S.SIZE_CARD_LABEL, color=S.SYNTH_ACCENT,
+                    bold=True, all_caps=True)
+        delta_h = _estimate_text_height_px(delta, DECISIONS_LEFT_W, 25)
+        SH.add_text(slide, DECISIONS_LEFT_X, DECISIONS_DELTA_Y, DECISIONS_LEFT_W,
+                    max(delta_h, 40), delta, size=S.SIZE_BODY, color=S.TEXT_WHITE)
+
+        if questions:
+            SH.add_text(slide, DECISIONS_RIGHT_X, DECISIONS_LABEL_Y, DECISIONS_RIGHT_W, 26,
+                        "QUESTIONS À OUVRIR", size=S.SIZE_CARD_LABEL, color=S.SYNTH_ACCENT,
+                        bold=True, all_caps=True)
+            card_h = DECISIONS_CARD_PAD_TOP + DECISIONS_ROW_H * len(questions)
+            card = SH.add_rounded_rect(slide, DECISIONS_RIGHT_X, DECISIONS_CARD_Y,
+                                        DECISIONS_RIGHT_W, card_h, fill=S.TEXT_WHITE, line_color=None)
+            SH.set_transparency(card, 92)
+            for i, q in enumerate(questions):
+                ry = DECISIONS_ROW_Y0 + DECISIONS_ROW_H * i
+                SH.add_text(slide, DECISIONS_BADGE_X, ry, DECISIONS_BADGE_W, 90, str(i + 1),
+                            size=Pt(13), color=S.SYNTH_ACCENT, bold=True)
+                SH.add_text(slide, DECISIONS_QTEXT_X, ry, DECISIONS_QTEXT_W, 90, q,
+                            size=S.SIZE_BODY, color=S.TEXT_WHITE)
+    else:
+        SH.add_text(slide, DECISIONS_LEFT_X, DECISIONS_LABEL_Y, DECISIONS_LEFT_W, 26,
+                    "QUESTIONS À OUVRIR", size=S.SIZE_CARD_LABEL, color=S.SYNTH_ACCENT,
+                    bold=True, all_caps=True)
+        for i, q in enumerate(questions):
+            ry = DECISIONS_DELTA_Y + DECISIONS_1COL_ROW_H * i
+            card = SH.add_rounded_rect(slide, DECISIONS_LEFT_X, ry, DECISIONS_LEFT_W,
+                                        DECISIONS_1COL_CARD_H, fill=S.TEXT_WHITE, line_color=None)
+            SH.set_transparency(card, 92)
+            SH.add_text(slide, DECISIONS_1COL_TEXT_X, ry + 9, DECISIONS_1COL_TEXT_W, 86,
+                        q, size=S.SIZE_BODY, color=S.TEXT_WHITE)
 
     _dark_footer(slide, project_name, page_num, total_pages)
 
