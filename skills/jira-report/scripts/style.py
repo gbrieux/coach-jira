@@ -58,6 +58,18 @@ CORRECTIVE_INCIDENT = RGBColor(0x2E, 0x5A, 0x8C)  # bleu
 CORRECTIVE_US = RGBColor(0x2E, 0x9E, 0x6B)        # vert
 CORRECTIVE_TECH = RGBColor(0xE0, 0xB0, 0x2E)      # or
 
+# {{chart:tempo_types}} — une série par type de ticket JIRA rencontré (nombre
+# variable, pas de liste fixe comme conso_corrective) : cycle sur cette
+# palette dans l'ordre des types triés par jh décroissant.
+TEMPO_TYPE_5 = RGBColor(0x7F, 0xB2, 0xCE)   # bleu clair
+TEMPO_TYPE_6 = RGBColor(0x8A, 0x63, 0xA8)   # violet
+TEMPO_TYPE_7 = RGBColor(0x5B, 0x6B, 0x7A)   # gris-bleu
+TEMPO_TYPE_8 = RGBColor(0xF9, 0xA4, 0x8C)   # orange clair
+TEMPO_TYPES_PALETTE = [
+    BRAND_PRIMARY, BRAND_ACCENT, TREND_OPTIMIST, CORRECTIVE_TECH,
+    TEMPO_TYPE_5, TEMPO_TYPE_6, TEMPO_TYPE_7, TEMPO_TYPE_8,
+]
+
 SYNTH_BG = BRAND_PRIMARY  # slides de synthèse : fond plein bleu
 SYNTH_ACCENT = ORANGE_LIGHT
 SYNTH_RULE = RGBColor(0xFF, 0xFF, 0xFF)  # filet blanc à 14% d'opacité (alpha géré à l'appel)

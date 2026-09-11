@@ -30,6 +30,7 @@ MAX_LEN = {
     "burndown_lecture": 200,
     "velocity_lecture": 200,
     "tempo_conso_lecture": 200,
+    "tempo_types_lecture": 200,
     "conso_corrective_lecture": 250,
     "cycle_time_lecture": 220,
     "types_lecture": 250,

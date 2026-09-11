@@ -35,6 +35,7 @@ ticket réelle. Il ne parle que de noms de champs du JSON et de règles.
   "cycle_time_lecture": "…",
   "conso_corrective_lecture": "…",
   "tempo_conso_lecture": "…",
+  "tempo_types_lecture": "…",
   "epics_lecture": "…"
 }
 ```
@@ -483,6 +484,7 @@ chaque variante.
 | `cycle_time_lecture` | Cycle time (percentiles) | `cycle_time` | la vélocité |
 | `conso_corrective_lecture` | Charge corrective par mois | `conso_corrective` | la conso totale du projet |
 | `tempo_conso_lecture` | Conso worklogs vs éléments terminés | `tempo_conso` | une lecture de productivité (voir ci-dessous) |
+| `tempo_types_lecture` | Temps Tempo par type de ticket, par mois | `tempo_types` | une lecture de productivité (voir ci-dessous) |
 | `epics_lecture` | Avancement par epic | `epics` (après §1.2) | la vélocité, le sprint courant |
 
 Cas particuliers :
@@ -494,6 +496,10 @@ Cas particuliers :
 - `tempo_conso_lecture` : ne pas commenter si le champ est absent (outil non installé
   sur ce projet). Le décalage entre conso et clôtures est temporel par nature :
   **jamais de lecture en productivité**.
+- `tempo_types_lecture` : ne pas commenter si le champ est absent (Tempo non installé
+  sur ce projet). Le mois en cours est partiel. La ventilation suit le mois du
+  worklog, pas le type de ticket dominant en volume d'US (voir `types_lecture`,
+  qui porte sur un autre champ) : **jamais de lecture en productivité**.
 - `epics_lecture` : interdiction absolue de commenter la prévisibilité avant la
   jointure §1.2.
 
@@ -517,6 +523,7 @@ ci-dessous ne sont pas indicatifs.
 | `burndown_lecture` | **200 caractères** | colonne étroite |
 | `velocity_lecture` | **200 caractères** | colonne étroite |
 | `tempo_conso_lecture` | **200 caractères** | colonne étroite |
+| `tempo_types_lecture` | **200 caractères** | colonne étroite |
 | `conso_corrective_lecture` | **250 caractères** | — |
 | `cycle_time_lecture` | **220 caractères** | bandeau bas, 2 lignes |
 | `types_lecture` | **250 caractères** | bandeau large, 2 lignes |

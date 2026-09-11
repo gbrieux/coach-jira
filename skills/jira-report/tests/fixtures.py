@@ -19,7 +19,7 @@ def make_issue(key, itype="User Story", status="Terminé(e)", status_id=None, cr
                 resolutiondate=None, sprints=None, sp=None,
                 timeoriginalestimate=None, timespent=None,
                 sprint_field="customfield_10020", story_points_field="customfield_10016",
-                status_history=None):
+                status_history=None, id=None):
     """`status_history` (pour cumulative_flow_diagram.py) : liste de
     (date_iso, from_status, to_status) — un changelog JIRA minimal
     (expand=changelog) — ou, pour simuler un statut renommé depuis, de
@@ -36,7 +36,7 @@ def make_issue(key, itype="User Story", status="Terminé(e)", status_id=None, cr
         fields[sprint_field] = [{"name": s} for s in sprints]
     if sp is not None:
         fields[story_points_field] = sp
-    issue = {"key": key, "fields": fields}
+    issue = {"key": key, "id": id or key, "fields": fields}
     if status_history is not None:
         histories = []
         for entry in status_history:

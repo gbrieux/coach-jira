@@ -294,8 +294,11 @@ def fetch_tempo_worklogs(issue_ids, date_from, date_to):
     (`issue_ids`, ids JIRA numériques), entre `date_from`/`date_to`
     (YYYY-MM-DD). `None` si Tempo n'est pas configuré (`TEMPO_API_TOKEN`
     absent de `.env`) ou si l'appel échoue (app absente/inaccessible sur
-    cette instance) — dans ce cas {{chart:tempo_conso}} affiche un message
-    plutôt qu'un graphique vide, voir indicators/tempo_conso.py.
+    cette instance) — dans ce cas {{chart:tempo_conso}} / {{chart:tempo_types}}
+    affichent un message plutôt qu'un graphique vide, voir
+    indicators/tempo_conso.py et indicators/tempo_types.py. Chaque worklog
+    porte `issue_id` (id JIRA numérique en chaîne) en plus de `date`/`seconds`
+    — tempo_types.py s'en sert pour retrouver le type de ticket loggé.
 
     L'API Tempo Cloud (api.tempo.io) n'a pas d'endpoint « worklogs d'une
     liste d'issues » : on récupère tous les worklogs de la période (paginé
@@ -317,7 +320,11 @@ def fetch_tempo_worklogs(issue_ids, date_from, date_to):
             for w in data.get("results", []):
                 issue_id = str((w.get("issue") or {}).get("id", ""))
                 if issue_id in wanted:
-                    out.append({"date": w.get("startDate"), "seconds": w.get("timeSpentSeconds") or 0})
+                    out.append({
+                        "date": w.get("startDate"),
+                        "seconds": w.get("timeSpentSeconds") or 0,
+                        "issue_id": issue_id,
+                    })
             url = (data.get("metadata") or {}).get("next")
             params = None  # 'next' porte déjà tous les paramètres de requête
     except requests.RequestException:

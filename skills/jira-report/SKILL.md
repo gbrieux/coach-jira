@@ -179,6 +179,7 @@ pas les tâches techniques, sous-tâches, anomalies, etc.
 | Types de tickets (conso) | `{{chart:types_conso}}` | timespent en jh par type (tous types) |
 | Charge corrective (conso) | `{{chart:conso_corrective}}` | 100% empilé, jh consommés par mois (mois de `resolutiondate`) sur tickets terminés, ventilés en 4 catégories anomalie / incident / Us / US tech — mapping par type de ticket exact via `anomaly_types`/`incident_types`/`tech_types`/`us_types` (config). Ticket terminé dont le type n'est dans aucune des 4 listes : exclu du graphique (pas de 5e bucket "Autre"). |
 | Conso Tempo vs US terminées | `{{chart:tempo_conso}}` | barres : conso Tempo (jh, worklogs agrégés par sprint via leur date de log) ; ligne (axe secondaire) : nb d'US terminées par sprint. Nécessite Tempo installé sur le projet **et** `TEMPO_API_TOKEN`/`TEMPO_NAME` dans `.env` (voir « Configuration ») — absent des deux : message "Données Tempo JIRA non disponibles" à la place du graphique, jamais de graphique vide. |
+| Temps Tempo par type de ticket (conso) | `{{chart:tempo_types}}` | barres empilées en volume absolu (jh), worklogs Tempo agrégés par mois du log — une série par type de ticket JIRA exact rencontré (tous types, pas de regroupement), triées par jh décroissant. Même dépendance Tempo que `{{chart:tempo_conso}}` (même message si absent). |
 | Cycle time (US) | `{{chart:cycle_time}}` | P15 / médiane / moyenne / P85 |
 | Répartition par nombre de sprints (US) | `{{chart:sprint_spread}}` | US terminées, groupées par nombre de sprints distincts traversés (champ Sprint JIRA) — dégradé clair (1 sprint) -> foncé (le plus de sprints). US sans sprint renseigné exclues (rien à mesurer). |
 | Tableau des sprints (US) | `{{liste_sprints}}` | table native : ajouts/terminés par sprint, cumuls (nb + jh) |
@@ -440,3 +441,17 @@ racine du skill.
   `indicators/common.sprint_names`) — même construction visuelle que
   `{{chart:status}}` (barre empilée + cartes, dégradé clair -> foncé), pour
   repérer les US qui débordent sur plusieurs sprints.
+- `{{chart:tempo_types}}` ajouté (`indicators/tempo_types.py`,
+  `render_agile.render_tempo_types`) : barres empilées en volume absolu (jh),
+  worklogs Tempo agrégés par mois du log (même bornes de mois que
+  `{{chart:conso_corrective}}`), une série par type de ticket JIRA exact
+  rencontré dans le périmètre — pas de regroupement en catégories fixes,
+  contrairement à `{{chart:conso_corrective}}`. Chaque worklog Tempo porte
+  désormais `issue_id` (`fetch_jira.py:fetch_tempo_worklogs`, en plus de
+  `date`/`seconds`, déjà présents pour `{{chart:tempo_conso}}`) — nécessaire
+  pour retrouver le type du ticket loggé via `issues`, un worklog sans
+  correspondance étant classé "Inconnu" plutôt qu'ignoré. Nouvelle palette
+  cyclique `style.TEMPO_TYPES_PALETTE` (nombre de types variable d'un projet
+  à l'autre, pas de liste fixe de couleurs comme `CORRECTIVE_*`). Même
+  dépendance Tempo que `{{chart:tempo_conso}}` (message de repli identique si
+  `TEMPO_API_TOKEN` absent ou app Tempo indisponible).
