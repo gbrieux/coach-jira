@@ -108,8 +108,11 @@ le détail des champs) — ne jamais inventer de token, de JQL ou de board_id.
 5. **Générer le PPT.** `python scripts/build_ppt.py <clé>` (ou `--all`) → lit le
    JSON + `templates/template.pptx`, génère chaque slide dans le design agile
    (voir `scripts/style.py`/`scripts/render_agile.py`), écrit
-   `projects/<clé>/output/indicateurs.pptx`. C'est l'étape que fait `/coach-ppt` :
-   elle ne réécrit la synthèse (étape 4) que si elle est encore absente du JSON.
+   `projects/<clé>/output/<AAAAMMJJ>-indicateurs.pptx` — préfixe daté (format
+   américain trié) sur la date de `generated_at` (date des données, pas du
+   build : rebuilder sans refetch écrase le même fichier). C'est l'étape que
+   fait `/coach-ppt` : elle ne réécrit la synthèse (étape 4) que si elle est
+   encore absente du JSON.
 6. **QA (obligatoire).** Valider et inspecter visuellement — voir « QA ».
 
 Pour tout traiter d'un coup : `python scripts/fetch_jira.py --all && python scripts/build_ppt.py --all`
@@ -168,18 +171,25 @@ Tous les indicateurs US-scopés (burnup, burndown, vélocité, statuts, cycle ti
 ne comptent que les tickets de type `User Story`/`Story` (`us_types` en config) —
 pas les tâches techniques, sous-tâches, anomalies, etc.
 
+**Code couleur par type de ticket** — uniforme sur tous les indicateurs qui
+distinguent les types (`{{chart:types}}`, `{{chart:types_conso}}`,
+`{{chart:conso_corrective}}`, `{{chart:tempo_types}}`) : voir
+`style.TICKET_TYPE_COLORS`/`style.type_color()` (US vert, US tech jaune,
+Sous-tâche bleu clair, Epic bleu foncé, Anomalie orange, Travaux violet,
+Incident rouge ; type non reconnu -> gris neutre `TYPE_OTHER`).
+
 | Indicateur | Placeholder chart | Source |
 |---|---|---|
 | Burnup release (US) | `{{chart:burnup}}` | terminé cumulé vs périmètre cumulé US par sprint, + 3 courbes de tendance (pessimiste/médiane/optimiste) projetées depuis la fin du sprint en cours. Périmètre/terminé cumulés en Story Points en axe secondaire (droite) — pas de tendance SP. |
 | Burndown sprint en cours (US) | `{{chart:burndown}}` | reste à faire jour par jour dans le sprint actif uniquement, vs droite idéale ; périmètre = US actuellement dans ce sprint (reports inclus). Reste à faire + droite idéale en Story Points en axe secondaire. |
 | Vélocité / Engagement (US) | `{{chart:velocity}}` | engagé vs terminé par sprint (champ Sprint JIRA), + ligne médiane (sprints à 0 terminé exclus). Engagé/terminé en Story Points en axe secondaire (lignes, vs barres US). |
 | Répartition statuts (US) | `{{chart:status}}` | count par statut — dégradé clair -> foncé dans l'ordre du `workflow`, statuts `done_statuses` en vert, statuts "en attente" en orange (même couleurs dans la barre et les cartes). Un statut avec un segment trop étroit pour son libellé reçoit une étiquette externe au-dessus/en dessous de la barre (deux statuts étroits consécutifs alternent de côté). |
-| Cumulative Flow Diagram (US) | `{{chart:cumulative_flow_diagram}}` | bandes empilées, jour par jour, du nb d'US ayant atteint chaque statut du `workflow` configuré (ou un statut suivant) — nécessite `workflow` non vide dans `project.yaml` (contrairement à `{{chart:status}}`, pas de repli par fréquence : l'ordre doit refléter la vraie progression). Reconstruit à partir de l'historique des statuts (`changelog`, voir « Champs JIRA récupérés »). Regroupement des statuts et bornes de dates configurables via le bloc optionnel `cfd:` de `project.yaml` (voir `scaffold/project.example.yaml`) — utile quand `workflow` compte beaucoup d'étapes (bandes trop nombreuses pour rester lisibles). |
-| Types de tickets (nb) | `{{chart:types}}` | count par type (tous types) |
-| Types de tickets (conso) | `{{chart:types_conso}}` | timespent en jh par type (tous types) |
-| Charge corrective (conso) | `{{chart:conso_corrective}}` | 100% empilé, jh consommés par mois (mois de `resolutiondate`) sur tickets terminés, ventilés en 4 catégories anomalie / incident / Us / US tech — mapping par type de ticket exact via `anomaly_types`/`incident_types`/`tech_types`/`us_types` (config). Ticket terminé dont le type n'est dans aucune des 4 listes : exclu du graphique (pas de 5e bucket "Autre"). |
+| Cumulative Flow Diagram (US) | `{{chart:cumulative_flow_diagram}}` | bandes empilées, jour par jour, du nb d'US ayant atteint chaque statut du `workflow` configuré (ou un statut suivant) — nécessite `workflow` non vide dans `project.yaml` (contrairement à `{{chart:status}}`, pas de repli par fréquence : l'ordre doit refléter la vraie progression). Reconstruit à partir de l'historique des statuts (`changelog`, voir « Champs JIRA récupérés »). Regroupement des statuts et bornes de dates configurables via le bloc optionnel `cfd:` de `project.yaml` (voir `scaffold/project.example.yaml`) — utile quand `workflow` compte beaucoup d'étapes (bandes trop nombreuses pour rester lisibles). 4 encarts (Périmètre suivi, À faire, En cours, Terminé) — `todo`/`in_progress` distinguent la 1re étape du `workflow` (bloqué en amont) des étapes intermédiaires (réellement en cours), % du périmètre sous chaque compte. |
+| Types de tickets (nb) | `{{chart:types}}` | count par type (tous types), barres colorées par type (voir « Code couleur » ci-dessus) |
+| Types de tickets (conso) | `{{chart:types_conso}}` | timespent en jh par type (tous types), % du total entre parenthèses après la valeur, barres colorées par type |
+| Charge corrective (conso) | `{{chart:conso_corrective}}` | 100% empilé, jh consommés par mois (mois de `resolutiondate`) sur tickets terminés, ventilés en 4 catégories anomalie / incident / Us / US tech (couleurs du code uniforme ci-dessus) — mapping par type de ticket exact via `anomaly_types`/`incident_types`/`tech_types`/`us_types` (config). Ticket terminé dont le type n'est dans aucune des 4 listes : exclu du graphique (pas de 5e bucket "Autre"). |
 | Conso Tempo vs US terminées | `{{chart:tempo_conso}}` | barres : conso Tempo (jh, worklogs agrégés par sprint via leur date de log) ; ligne (axe secondaire) : nb d'US terminées par sprint. Nécessite Tempo installé sur le projet **et** `TEMPO_API_TOKEN`/`TEMPO_NAME` dans `.env` (voir « Configuration ») — absent des deux : message "Données Tempo JIRA non disponibles" à la place du graphique, jamais de graphique vide. |
-| Temps Tempo par type de ticket (conso) | `{{chart:tempo_types}}` | barres empilées en volume absolu (jh), worklogs Tempo agrégés par mois du log — une série par type de ticket JIRA exact rencontré (tous types, pas de regroupement), triées par jh décroissant. Même dépendance Tempo que `{{chart:tempo_conso}}` (même message si absent). |
+| Temps Tempo par type de ticket (conso) | `{{chart:tempo_types}}` | barres empilées en volume absolu (jh), worklogs Tempo agrégés par mois du log — une série par type de ticket JIRA exact rencontré (tous types, pas de regroupement), triées par jh décroissant, couleurs du code uniforme ci-dessus. Même dépendance Tempo que `{{chart:tempo_conso}}` (même message si absent). |
 | Cycle time (US) | `{{chart:cycle_time}}` | P15 / médiane / moyenne / P85 |
 | Répartition par nombre de sprints (US) | `{{chart:sprint_spread}}` | US terminées, groupées par nombre de sprints distincts traversés (champ Sprint JIRA) — dégradé clair (1 sprint) -> foncé (le plus de sprints). US sans sprint renseigné exclues (rien à mesurer). |
 | Tableau des sprints (US) | `{{liste_sprints}}` | table native : ajouts/terminés par sprint, cumuls (nb + jh) |
@@ -250,25 +260,28 @@ template est bien annoté.
 
 ## QA
 
-`projects/<clé>/output/indicateurs.pptx` ci-dessous est dans le répertoire de
-données (voir « Répertoire de données » plus haut), pas dans le repo skill.
+`projects/<clé>/output/<AAAAMMJJ>-indicateurs.pptx` ci-dessous est dans le
+répertoire de données (voir « Répertoire de données » plus haut), pas dans le
+repo skill — nom daté sur `generated_at` (voir « Workflow », étape 5) :
+remplacer `<AAAAMMJJ>` par la date affichée par `build_ppt.py` en sortie, ou
+prendre le plus récent (`ls -1 <data>/projects/<clé>/output/*-indicateurs.pptx | sort | tail -1`).
 
 **Environnement cloud (sandbox Linux, skill `pptx` public disponible) :**
 
 Fichier :
 ```bash
-python /mnt/skills/public/pptx/scripts/office/validate.py "<data>/projects/<clé>/output/indicateurs.pptx" --original "<data>/templates/template.pptx"
+python /mnt/skills/public/pptx/scripts/office/validate.py "<data>/projects/<clé>/output/<AAAAMMJJ>-indicateurs.pptx" --original "<data>/templates/template.pptx"
 ```
 
 Placeholders restants (aucun ne doit subsister) :
 ```bash
-markitdown "<data>/projects/<clé>/output/indicateurs.pptx" | grep -oE "\{\{[^}]+\}\}" && echo "PLACEHOLDERS RESTANTS" || echo "OK"
+markitdown "<data>/projects/<clé>/output/<AAAAMMJJ>-indicateurs.pptx" | grep -oE "\{\{[^}]+\}\}" && echo "PLACEHOLDERS RESTANTS" || echo "OK"
 ```
 
 Visuel : convertir en images et inspecter (overflow, charts vides, alignement) :
 ```bash
-python /mnt/skills/public/pptx/scripts/office/soffice.py --headless --convert-to pdf "<data>/projects/<clé>/output/indicateurs.pptx"
-pdftoppm -jpeg -r 150 "<data>/projects/<clé>/output/indicateurs.pdf" slide && ls -1 "$PWD"/slide-*.jpg
+python /mnt/skills/public/pptx/scripts/office/soffice.py --headless --convert-to pdf "<data>/projects/<clé>/output/<AAAAMMJJ>-indicateurs.pptx"
+pdftoppm -jpeg -r 150 "<data>/projects/<clé>/output/<AAAAMMJJ>-indicateurs.pdf" slide && ls -1 "$PWD"/slide-*.jpg
 ```
 
 **Poste local Windows (pas de `soffice`/`pdftoppm`/`markitdown`) :**
@@ -280,7 +293,7 @@ python -c "
 from pptx import Presentation
 import re
 pat = re.compile(r'\{\{[^}]+\}\}')
-prs = Presentation('<data>/projects/<clé>/output/indicateurs.pptx')
+prs = Presentation('<data>/projects/<clé>/output/<AAAAMMJJ>-indicateurs.pptx')
 found = []
 for i, slide in enumerate(prs.slides, 1):
     for shape in slide.shapes:
@@ -450,8 +463,33 @@ racine du skill.
   désormais `issue_id` (`fetch_jira.py:fetch_tempo_worklogs`, en plus de
   `date`/`seconds`, déjà présents pour `{{chart:tempo_conso}}`) — nécessaire
   pour retrouver le type du ticket loggé via `issues`, un worklog sans
-  correspondance étant classé "Inconnu" plutôt qu'ignoré. Nouvelle palette
-  cyclique `style.TEMPO_TYPES_PALETTE` (nombre de types variable d'un projet
-  à l'autre, pas de liste fixe de couleurs comme `CORRECTIVE_*`). Même
-  dépendance Tempo que `{{chart:tempo_conso}}` (message de repli identique si
-  `TEMPO_API_TOKEN` absent ou app Tempo indisponible).
+  correspondance étant classé "Inconnu" plutôt qu'ignoré. Couleur par série
+  via `style.type_color()` (voir « Code couleur par type de ticket » plus
+  haut — remplace une palette cyclique initiale, retirée au profit du code
+  couleur uniforme ci-dessous). Même dépendance Tempo que
+  `{{chart:tempo_conso}}` (message de repli identique si `TEMPO_API_TOKEN`
+  absent ou app Tempo indisponible).
+- Code couleur uniforme par type de ticket (`style.TICKET_TYPE_COLORS`/
+  `style.type_color()`, voir « Indicateurs produits ») appliqué à
+  `{{chart:types}}`, `{{chart:types_conso}}`, `{{chart:conso_corrective}}` et
+  `{{chart:tempo_types}}` — les anciennes constantes `CORRECTIVE_*` (4
+  couleurs propres à cet indicateur) et `TEMPO_TYPES_PALETTE` (cycle
+  arbitraire) sont retirées, remplacées par ce code couleur unique partagé.
+  `{{chart:types_conso}}` affiche désormais le % du total entre parenthèses
+  après chaque valeur (colonne valeur élargie à 210 -> 330px pour
+  l'accueillir sans retour à la ligne). `{{chart:cumulative_flow_diagram}}`
+  distingue désormais 4 encarts (Périmètre suivi, À faire, En cours,
+  Terminé) au lieu de 3 — `todo`/`in_progress` dans `cfd.totals`
+  (`indicators/cumulative_flow_diagram.py`) séparent les US bloquées à la
+  toute première étape du `workflow` de celles réellement au-delà (avant
+  cette distinction, `in_progress` mélangeait les deux sous "en cours").
+  `{{coach:synthese}}` : les 5 lignes de `LECTURE COACHING` ont désormais une
+  hauteur proportionnelle au texte réel (même heuristique
+  `_estimate_text_height_px` que `vue_ensemble`/`risque_principal`) plutôt
+  qu'un découpage en 5 tranches égales, qui laissait un grand vide sous une
+  lecture courte pendant qu'une lecture longue frôlait son séparateur.
+  `build_ppt.py` préfixe désormais le nom du fichier PPT généré par la date
+  de `generated_at` au format AAAAMMJJ (`<AAAAMMJJ>-indicateurs.pptx`) —
+  `render_slides_windows.py` et `scripts/inspect_template.py`-like tooling
+  doivent prendre le plus récent (`sorted(glob("*-indicateurs.pptx"))[-1]`)
+  plutôt qu'un nom fixe.

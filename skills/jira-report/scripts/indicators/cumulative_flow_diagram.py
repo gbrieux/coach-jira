@@ -186,14 +186,24 @@ def compute(issues, sprints, conf):
                 reached[i][di] += 1
 
     # À la dernière date affichée — pas forcément "aujourd'hui" si
-    # `cfd.end_date` est configuré dans le passé.
+    # `cfd.end_date` est configuré dans le passé. `todo` = bloqué à la toute
+    # première étape (n'a même pas atteint la 2e) ; `in_progress` = a dépassé
+    # la 1re étape mais pas encore terminé — distinction attendue par les
+    # encarts du rendu (voir render_agile.render_cfd), pas seulement
+    # "scope - done" qui mélangeait les deux.
     scope = reached[0][-1]
     done = reached[n_stages - 1][-1]
+    if n_stages > 1:
+        past_first_stage = reached[1][-1]
+        todo = scope - past_first_stage
+        in_progress = past_first_stage - done
+    else:
+        todo, in_progress = 0, 0
     return {
         "cfd": {
             "categories": [d.strftime("%d/%m") for d in days],
             "workflow": labels,
             "reached": reached,
-            "totals": {"scope": scope, "done": done, "in_progress": scope - done},
+            "totals": {"scope": scope, "todo": todo, "in_progress": in_progress, "done": done},
         }
     }

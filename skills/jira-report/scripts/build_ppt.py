@@ -287,7 +287,12 @@ def process(key):
             if shape.has_text_frame:
                 replace_runs(shape.text_frame, mapping)
 
-    out = output_dir(key) / "indicateurs.pptx"
+    # Préfixe date (YYYYMMDD, format américain trié) de la date des données
+    # (`generated_at`), pas de la date du build : rebuilder le PPT sans
+    # relancer fetch_jira.py écrase le même fichier plutôt que d'en semer un
+    # nouveau à chaque essai de mise en forme.
+    date_prefix = datetime.fromisoformat(data["generated_at"]).strftime("%Y%m%d")
+    out = output_dir(key) / f"{date_prefix}-indicateurs.pptx"
     prs.save(str(out))
     print(f"[{key}] écrit {out}  (slides: {', '.join(placed) or 'aucune'})")
 

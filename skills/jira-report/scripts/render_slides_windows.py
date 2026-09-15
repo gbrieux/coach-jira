@@ -51,10 +51,14 @@ def main():
         print(f"ERREUR: {e}", file=sys.stderr)
         sys.exit(1)
 
-    pptx_path = out / "indicateurs.pptx"
-    if not pptx_path.exists():
-        print(f"ERREUR: {pptx_path} introuvable — lancer build_ppt.py d'abord.", file=sys.stderr)
+    # Nom daté (YYYYMMDD-indicateurs.pptx, voir build_ppt.py) — plusieurs
+    # fichiers peuvent coexister (un par date de données) ; le tri lexical
+    # suffit (préfixe zero-paddé) pour prendre le plus récent.
+    candidates = sorted(out.glob("*-indicateurs.pptx"), reverse=True)
+    if not candidates:
+        print(f"ERREUR: aucun *-indicateurs.pptx dans {out} — lancer build_ppt.py d'abord.", file=sys.stderr)
         sys.exit(1)
+    pptx_path = candidates[0]
 
     dest_dir = out / "slides"
     render(pptx_path, dest_dir)

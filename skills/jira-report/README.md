@@ -28,7 +28,7 @@ projet = un JQL = un PPT.
 ```bash
 python scripts/inspect_template.py          # vérifier les placeholders du template
 python scripts/fetch_jira.py LMA            # extraire les données -> projects/LMA/output/data.json
-python scripts/build_ppt.py LMA             # générer -> projects/LMA/output/indicateurs.pptx
+python scripts/build_ppt.py LMA             # générer -> projects/LMA/output/<AAAAMMJJ>-indicateurs.pptx
 # ou tout d'un coup :
 python scripts/fetch_jira.py --all && python scripts/build_ppt.py --all
 ```

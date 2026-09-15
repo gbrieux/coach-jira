@@ -40,7 +40,10 @@ def test_reconstructs_daily_stage_counts_from_changelog():
     # jour 5 (06/01) : KEY-1 termine, KEY-2 n'a jamais bougé
     assert [r[5] for r in reached] == [2, 1, 1]
 
-    assert cfd["totals"] == {"scope": 2, "done": 1, "in_progress": 1}
+    # KEY-2 est resté bloqué en "À faire" (todo), personne n'est réellement
+    # "En cours" au dernier jour affiché (in_progress=0) même si 1 US sur 2
+    # n'est pas terminée.
+    assert cfd["totals"] == {"scope": 2, "todo": 1, "in_progress": 0, "done": 1}
 
 
 def test_unknown_status_in_history_keeps_last_known_stage():
@@ -83,7 +86,29 @@ def test_renamed_status_resolved_via_id():
     reached = out["cfd"]["reached"]
 
     assert [r[1] for r in reached] == [1, 1, 1]
-    assert out["cfd"]["totals"] == {"scope": 1, "done": 1, "in_progress": 0}
+    assert out["cfd"]["totals"] == {"scope": 1, "todo": 0, "in_progress": 0, "done": 1}
+
+
+def test_totals_split_todo_vs_in_progress():
+    """`todo` (bloqué à la 1re étape) et `in_progress` (au-delà, pas encore
+    terminé) doivent être distingués, pas fondus dans un seul total."""
+    issue_todo = make_issue("KEY-1", status="À faire", created="2024-01-01T00:00:00+00:00")
+    issue_in_progress = make_issue(
+        "KEY-2", status="En cours", created="2024-01-01T00:00:00+00:00",
+        status_history=[("2024-01-02T09:00:00+00:00", "À faire", "En cours")],
+    )
+    issue_done = make_issue(
+        "KEY-3", status="Terminé(e)", created="2024-01-01T00:00:00+00:00",
+        status_history=[
+            ("2024-01-02T09:00:00+00:00", "À faire", "En cours"),
+            ("2024-01-03T09:00:00+00:00", "En cours", "Terminé(e)"),
+        ],
+    )
+    conf = {**DEFAULT_CONF, "workflow": WORKFLOW}
+
+    out = cfd_mod.compute([issue_todo, issue_in_progress, issue_done], [], conf)
+
+    assert out["cfd"]["totals"] == {"scope": 3, "todo": 1, "in_progress": 1, "done": 1}
 
 
 def test_non_us_types_excluded():
@@ -156,7 +181,7 @@ def test_cfd_date_bounds_configured():
     cfd = out["cfd"]
 
     assert cfd["categories"] == ["05/01", "06/01", "07/01", "08/01"]
-    assert cfd["totals"] == {"scope": 1, "done": 1, "in_progress": 0}
+    assert cfd["totals"] == {"scope": 1, "todo": 0, "in_progress": 0, "done": 1}
 
 
 def test_cfd_end_date_in_future_capped_to_today():

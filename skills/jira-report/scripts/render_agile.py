@@ -668,6 +668,10 @@ def render_burndown(slide, placeholder_shape, data, template_path, page_num, tot
         last_pt.data_label.text_frame.paragraphs[0].runs[0].font.size = Pt(11)
         last_pt.data_label.text_frame.paragraphs[0].runs[0].font.bold = True
         last_pt.data_label.text_frame.paragraphs[0].runs[0].font.color.rgb = S.BRAND_ACCENT
+        # Le dernier point est proche de l'axe droit par construction. PowerPoint
+        # place sinon le libellé à droite du marqueur, où il recouvre les graduations.
+        # Au-dessus, il reste lisible sans se confondre avec la ligne horizontale.
+        last_pt.data_label.position = XL_LABEL_POSITION.ABOVE
 
         # Aire sous la courbe « Réel » à 9 % d'opacité (combo, derrière la ligne)
         area_idx = _add_combo_area(chart, "Reste à faire (US)", bd["categories"], bd["real"],
@@ -787,6 +791,7 @@ def _render_burndown_single_unit(slide, placeholder_shape, data, template_path, 
         last_pt.data_label.text_frame.paragraphs[0].runs[0].font.size = Pt(11)
         last_pt.data_label.text_frame.paragraphs[0].runs[0].font.bold = True
         last_pt.data_label.text_frame.paragraphs[0].runs[0].font.color.rgb = S.BRAND_ACCENT
+        last_pt.data_label.position = XL_LABEL_POSITION.ABOVE
 
         # Aire sous la courbe « Réel » à 9 % d'opacité (combo, derrière la ligne)
         area_idx = _add_combo_area(chart, f"Reste à faire ({unit_label})", bd["categories"], bd[real_key],
@@ -1167,7 +1172,10 @@ def render_status(slide, placeholder_shape, data, template_path, page_num, total
     # des segments trop étroits pour leur texte à l'intérieur (voir plus
     # bas) — un statut avec peu de tickets ne doit jamais rester sans
     # étiquette visible.
-    ABOVE_H, GAP_BELOW = 40, 46
+    # Deux rangées de libellés externes de chaque côté : trois petits segments
+    # consécutifs utilisent ainsi haut-proche, bas-proche, haut-éloigné sans se
+    # recouvrir (cas réel 4 / 2 / 1 US en début de barre).
+    ABOVE_H, GAP_BELOW = 68, 70
     bar_y, bar_h = S.CONTENT_Y + ABOVE_H, 78
 
     segments, x = [], S.MARGIN_X
@@ -1184,7 +1192,7 @@ def render_status(slide, placeholder_shape, data, template_path, page_num, total
     # la barre — deux statuts étroits consécutifs alternent de côté pour ne
     # pas superposer leurs libellés.
     tick_len, label_h = 10, 24
-    above_next = True
+    external_lane = 0
     for name, count, seg_x, seg_w in segments:
         color = colors[name]
         label = f"{name} {count}"
@@ -1192,22 +1200,28 @@ def render_status(slide, placeholder_shape, data, template_path, page_num, total
             SH.add_text(slide, seg_x + 12, bar_y + bar_h / 2 - 20, seg_w - 24, 40,
                         label, size=Pt(11), color=_contrast_text_color(color), bold=True,
                         anchor=MSO_ANCHOR.MIDDLE)
-            above_next = True  # une rupture de série redémarre au-dessus
+            external_lane = 0  # une rupture de série redémarre au-dessus
             continue
 
         cx = seg_x + seg_w / 2
         label_w = _text_w_px(label) + 16
-        if above_next:
-            SH.add_rect(slide, cx - 1, bar_y - tick_len, 2, tick_len, fill=color, line_color=None)
-            SH.add_text(slide, cx - label_w / 2, bar_y - tick_len - label_h, label_w, label_h,
+        label_x = max(S.MARGIN_X, min(cx - label_w / 2, S.MARGIN_X + S.CONTENT_W - label_w))
+        above = external_lane % 2 == 0
+        level = external_lane // 2
+        connector_len = tick_len + level * (label_h + 4)
+        if above:
+            SH.add_rect(slide, cx - 1, bar_y - connector_len, 2, connector_len,
+                        fill=color, line_color=None)
+            SH.add_text(slide, label_x, bar_y - connector_len - label_h, label_w, label_h,
                         label, size=Pt(9.5), color=S.TEXT_PRIMARY, bold=True,
                         align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.BOTTOM)
         else:
-            SH.add_rect(slide, cx - 1, bar_y + bar_h, 2, tick_len, fill=color, line_color=None)
-            SH.add_text(slide, cx - label_w / 2, bar_y + bar_h + tick_len, label_w, label_h,
+            SH.add_rect(slide, cx - 1, bar_y + bar_h, 2, connector_len,
+                        fill=color, line_color=None)
+            SH.add_text(slide, label_x, bar_y + bar_h + connector_len, label_w, label_h,
                         label, size=Pt(9.5), color=S.TEXT_PRIMARY, bold=True,
                         align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.TOP)
-        above_next = not above_next
+        external_lane += 1
 
     # ------------------------------------------------------------- cartes
     grid_y = bar_y + bar_h + GAP_BELOW
@@ -1413,14 +1427,21 @@ def render_cfd(slide, placeholder_shape, data, template_path, page_num, total_pa
     val_ax.format.line.fill.background()
 
     # ------------------------------------------------------------ rail droit
+    scope = totals["scope"]
+
+    def _pct(v):
+        return f"{round(100 * v / scope)} % du périmètre" if scope else ""
+
+    card_h = (S.CONTENT_H - 3 * 20) / 4
     y = S.CONTENT_Y
-    _card_stat(slide, RAIL_X, y, RAIL_W, 174, "PÉRIMÈTRE SUIVI", f"{totals['scope']} US", "")
-    y += 174 + 20
-    done_pct = round(100 * totals["done"] / totals["scope"]) if totals["scope"] else 0
-    _card_stat(slide, RAIL_X, y, RAIL_W, 174, "TERMINÉ", f"{totals['done']} US", f"{done_pct} % du périmètre")
-    y += 174 + 20
-    _card_stat(slide, RAIL_X, y, RAIL_W, S.CONTENT_H - 174 * 2 - 40, "EN COURS",
-               f"{totals['in_progress']} US", "")
+    _card_stat(slide, RAIL_X, y, RAIL_W, card_h, "PÉRIMÈTRE SUIVI", f"{scope} US", "")
+    y += card_h + 20
+    _card_stat(slide, RAIL_X, y, RAIL_W, card_h, "À FAIRE", f"{totals['todo']} US", _pct(totals["todo"]))
+    y += card_h + 20
+    _card_stat(slide, RAIL_X, y, RAIL_W, card_h, "EN COURS",
+               f"{totals['in_progress']} US", _pct(totals["in_progress"]))
+    y += card_h + 20
+    _card_stat(slide, RAIL_X, y, RAIL_W, card_h, "TERMINÉ", f"{totals['done']} US", _pct(totals["done"]))
 
     SH.add_footer(slide, project_name, page_num, total_pages)
 
@@ -1626,11 +1647,10 @@ def render_epics(slide, placeholder_shape, data, template_path, page_num, total_
 
 
 # ==================================================================== types
-def _bar_rows(slide, x, y, w, h, items, value_fmt, bar_color_fn, unit=""):
+def _bar_rows(slide, x, y, w, h, items, value_fmt, bar_color_fn, unit="", value_w=130):
     """Lignes de barres horizontales réparties sur la hauteur disponible
     (label 280px, piste F4F7FA, barre pleine, valeur alignée à droite)."""
     label_w = 280
-    value_w = 130
     track_x = x + label_w + 16
     track_w = w - label_w - 16 - value_w - 16
     max_val = max((v for _, v in items), default=1) * 1.06 or 1
@@ -1668,7 +1688,7 @@ def render_types(slide, placeholder_shape, data, template_path, page_num, total_
     lecture_h = 70 if lecture else 20
     rows_h = S.CONTENT_H - 2 * pad - lecture_h
     _bar_rows(slide, S.MARGIN_X + pad, S.CONTENT_Y + pad, S.CONTENT_W - 2 * pad, rows_h,
-              items, lambda v: str(int(v)), lambda i: S.BRAND_PRIMARY)
+              items, lambda v: str(int(v)), lambda i: S.type_color(items[i][0]))
 
     if lecture:
         sep_y = S.CONTENT_Y + pad + rows_h + 14
@@ -1704,8 +1724,8 @@ def render_types_conso(slide, placeholder_shape, data, template_path, page_num, 
     lecture_h = 60 if lecture else 20
     rows_h = S.CONTENT_H - 2 * pad - 40 - lecture_h
     _bar_rows(slide, S.MARGIN_X + pad, S.CONTENT_Y + pad + 40, left_w - 2 * pad, rows_h,
-              items, lambda v: f"{_fr_num(v)}",
-              lambda i: S.BRAND_ACCENT if i == 0 else S.BRAND_PRIMARY)
+              items, lambda v: f"{_fr_num(v)} ({_fr_num(100 * v / total_jh, 1)} %)" if total_jh else _fr_num(v),
+              lambda i: S.type_color(items[i][0]), value_w=330)
     if lecture:
         sep_y = S.CONTENT_Y + pad + 40 + rows_h + 14
         SH.add_rect(slide, S.MARGIN_X + pad, sep_y, left_w - 2 * pad, 1.5, fill=S.CARD_BORDER, line_color=None)
@@ -1752,8 +1772,8 @@ def render_conso_corrective(slide, placeholder_shape, data, template_path, page_
     ORDER = ["anomalie", "incident", "us", "us_tech"]
     LABELS = {"anomalie": "Conso anomalie", "incident": "Conso incident",
               "us": "Conso Us", "us_tech": "Conso US tech"}
-    COLORS = {"anomalie": S.CORRECTIVE_ANOMALY, "incident": S.CORRECTIVE_INCIDENT,
-              "us": S.CORRECTIVE_US, "us_tech": S.CORRECTIVE_TECH}
+    COLORS = {"anomalie": S.TYPE_ANOMALY, "incident": S.TYPE_INCIDENT,
+              "us": S.TYPE_US, "us_tech": S.TYPE_US_TECH}
 
     cd = CategoryChartData()
     cd.categories = cc["categories"]
@@ -1925,10 +1945,9 @@ def render_tempo_types(slide, placeholder_shape, data, template_path, page_num, 
     x_frac, y_frac, w_frac, h_frac = 0.02, 0.03, 0.96, 0.80
     _set_manual_plot_area(chart, x_frac, y_frac, w_frac, h_frac)
 
-    palette = S.TEMPO_TYPES_PALETTE
-    for i, (ser, itype) in enumerate(zip(chart.plots[0].series, types_order)):
+    for ser, itype in zip(chart.plots[0].series, types_order):
         ser.format.fill.solid()
-        ser.format.fill.fore_color.rgb = palette[i % len(palette)]
+        ser.format.fill.fore_color.rgb = S.type_color(itype)
         ser.format.line.fill.background()
 
     chart.has_legend = True
@@ -2372,17 +2391,33 @@ def _render_coach_slide(slide, project_name, template_path, page_num, total_page
                                             fill=S.TEXT_WHITE, line_color=None)
         SH.set_transparency(lecture_card, 92)  # carte 8 % opaque sur fond bleu
         pad = S.CARD_PADDING_PX
-        row_h = (card_h - 2 * pad) / len(lecture)
-        for i, (topic, text) in enumerate(lecture):
-            ry = card_y + pad + i * row_h
+        text_x = right_x + pad + 176
+        text_w = right_w - 2 * pad - 176
+        row_gap = 18
+        min_row_h = 40
+        # Hauteur de chaque ligne proportionnelle à son texte réel (voir
+        # _estimate_text_height_px) plutôt qu'une division égale entre les 5
+        # entrées : sinon une lecture courte ("Périmètre" en 1 ligne) laisse
+        # un grand vide avant le séparateur suivant pendant qu'une lecture
+        # longue ("Flux" sur 3 lignes) frôle le sien — l'alignement des
+        # séparateurs doit suivre le contenu, pas une grille fixe.
+        natural_h = [max(_estimate_text_height_px(text, text_w, BODY_PX), min_row_h)
+                     for _, text in lecture]
+        avail_h = card_h - 2 * pad - row_gap * (len(lecture) - 1)
+        total_natural = sum(natural_h)
+        scale = avail_h / total_natural if total_natural else 1
+        row_hs = [h * scale for h in natural_h]
+        ry = card_y + pad
+        for i, ((topic, text), row_h) in enumerate(zip(lecture, row_hs)):
             SH.add_text(slide, right_x + pad, ry, 160, row_h, topic, size=Pt(13),
                         color=S.SYNTH_ACCENT, bold=True)
-            SH.add_text(slide, right_x + pad + 176, ry, right_w - 2 * pad - 176, row_h, text,
+            SH.add_text(slide, text_x, ry, text_w, row_h, text,
                         size=S.SIZE_BODY, color=S.TEXT_WHITE)
             if i > 0:
-                rule = SH.add_rect(slide, right_x + pad, ry, right_w - 2 * pad, 1.2,
+                rule = SH.add_rect(slide, right_x + pad, ry - row_gap / 2, right_w - 2 * pad, 1.2,
                                     fill=S.TEXT_WHITE, line_color=None)
                 SH.set_transparency(rule, 86)
+            ry += row_h + row_gap
 
     if recos:
         reco_y = y

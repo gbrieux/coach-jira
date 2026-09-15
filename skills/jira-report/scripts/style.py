@@ -52,23 +52,37 @@ TREND_OPTIMIST = RGBColor(0x2E, 0x9E, 0x6B)
 TREND_MEDIAN = RGBColor(0xF0, 0x4E, 0x23)
 TREND_PESSIMIST = RGBColor(0xC0, 0x39, 0x2B)
 
-# {{chart:conso_corrective}} — 4 catégories anomalie/incident/Us/US tech
-CORRECTIVE_ANOMALY = RGBColor(0xC0, 0x39, 0x2B)   # rouge
-CORRECTIVE_INCIDENT = RGBColor(0x2E, 0x5A, 0x8C)  # bleu
-CORRECTIVE_US = RGBColor(0x2E, 0x9E, 0x6B)        # vert
-CORRECTIVE_TECH = RGBColor(0xE0, 0xB0, 0x2E)      # or
+# Code couleur uniforme par type de ticket JIRA — le même type a toujours la
+# même couleur sur tous les indicateurs qui distinguent les types
+# ({{chart:types}}, {{chart:types_conso}}, {{chart:conso_corrective}},
+# {{chart:tempo_types}}), jamais une palette différente par slide.
+TYPE_US = RGBColor(0x2E, 0x9E, 0x6B)        # vert
+TYPE_US_TECH = RGBColor(0xE0, 0xB0, 0x2E)   # jaune
+TYPE_SUBTASK = RGBColor(0x7F, 0xB2, 0xCE)   # bleu clair
+TYPE_EPIC = RGBColor(0x1F, 0x4E, 0x79)      # bleu foncé
+TYPE_ANOMALY = RGBColor(0xE6, 0x8A, 0x2E)   # orange
+TYPE_WORK = RGBColor(0x8A, 0x63, 0xA8)      # violet
+TYPE_INCIDENT = RGBColor(0xC0, 0x39, 0x2B)  # rouge
+TYPE_OTHER = RGBColor(0x93, 0xA2, 0xB0)     # gris — type non reconnu
 
-# {{chart:tempo_types}} — une série par type de ticket JIRA rencontré (nombre
-# variable, pas de liste fixe comme conso_corrective) : cycle sur cette
-# palette dans l'ordre des types triés par jh décroissant.
-TEMPO_TYPE_5 = RGBColor(0x7F, 0xB2, 0xCE)   # bleu clair
-TEMPO_TYPE_6 = RGBColor(0x8A, 0x63, 0xA8)   # violet
-TEMPO_TYPE_7 = RGBColor(0x5B, 0x6B, 0x7A)   # gris-bleu
-TEMPO_TYPE_8 = RGBColor(0xF9, 0xA4, 0x8C)   # orange clair
-TEMPO_TYPES_PALETTE = [
-    BRAND_PRIMARY, BRAND_ACCENT, TREND_OPTIMIST, CORRECTIVE_TECH,
-    TEMPO_TYPE_5, TEMPO_TYPE_6, TEMPO_TYPE_7, TEMPO_TYPE_8,
-]
+TICKET_TYPE_COLORS = {
+    "User Story": TYPE_US,
+    "Story": TYPE_US,
+    "Technical Story": TYPE_US_TECH,
+    "Sous-tâche": TYPE_SUBTASK,
+    "Epic": TYPE_EPIC,
+    "Anomalie": TYPE_ANOMALY,
+    "Travaux": TYPE_WORK,
+    "Incident": TYPE_INCIDENT,
+}
+
+
+def type_color(type_name):
+    """Couleur canonique d'un type de ticket JIRA exact (`TICKET_TYPE_COLORS`
+    ci-dessus) ; `TYPE_OTHER` (gris neutre) pour un type absent de cette
+    liste (variante de libellé, type propre à un projet) — jamais une
+    couleur du jeu ci-dessus qui laisserait croire à une correspondance."""
+    return TICKET_TYPE_COLORS.get(type_name, TYPE_OTHER)
 
 SYNTH_BG = BRAND_PRIMARY  # slides de synthèse : fond plein bleu
 SYNTH_ACCENT = ORANGE_LIGHT

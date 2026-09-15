@@ -165,3 +165,64 @@ def test_epics_table_uses_original_height_when_legend_absent():
     table = _table_shape(slide)
     expected_h = render_agile.S.px(render_agile.S.CONTENT_H - 150 - 20)
     assert abs(table.height - expected_h) < render_agile.S.px(2)
+
+
+# -------------------------------------------------------------- chart labels
+def test_burndown_last_label_is_above_and_clear_of_right_axis():
+    prs = Presentation()
+    slide, ph = _blank_slide_with_placeholder(prs)
+    data = {
+        "project_name": "Projet Test",
+        "coaching": {},
+        "metrics": {
+            "burndown_sprint": {
+                "sprint": "Sprint 25",
+                "scope": 3,
+                "scope_sp": 5,
+                "categories": ["01/09", "02/09", "03/09"],
+                "ideal": [3, 1.5, 0],
+                "real": [3, 2, 2],
+                "ideal_sp": [5, 2.5, 0],
+                "real_sp": [5, 4, 4],
+            }
+        },
+    }
+
+    render_agile.render_burndown(slide, ph, data, "unused.pptx", 1, 1)
+
+    chart = next(shape.chart for shape in slide.shapes if shape.has_chart)
+    # python-pptx écrit correctement la position au niveau du point mais son
+    # getter ne la relit pas encore ; l'assertion porte donc sur le XML produit.
+    positions = chart._chartSpace.xpath(".//c:dLbl[c:idx[@val='2']]/c:dLblPos")
+    assert positions and positions[0].get("val") == "t"
+
+
+def test_status_external_labels_use_distinct_lanes_for_dense_segments():
+    prs = Presentation()
+    slide, ph = _blank_slide_with_placeholder(prs)
+    data = {
+        "project_name": "Projet Test",
+        "metrics": {
+            "status_counts_us": {
+                "Bac à sable": 4,
+                "Affinage technique": 2,
+                "En cours": 1,
+                "Terminé(e)": 230,
+            },
+            "done_statuses_us": ["Terminé(e)"],
+        },
+    }
+
+    render_agile.render_status(slide, ph, data, "unused.pptx", 1, 1)
+
+    labels = {
+        shape.text_frame.text: shape
+        for shape in slide.shapes
+        if shape.has_text_frame
+        and shape.text_frame.text in {"Bac à sable 4", "Affinage technique 2", "En cours 1"}
+    }
+    assert len(labels) == 3
+    boxes = [(s.left, s.top, s.left + s.width, s.top + s.height) for s in labels.values()]
+    for i, a in enumerate(boxes):
+        for b in boxes[i + 1:]:
+            assert a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1]
