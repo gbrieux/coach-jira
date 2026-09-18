@@ -2,6 +2,7 @@
 utilisent une Presentation python-pptx vide (aucune dépendance au template
 réel du répertoire de données), voir conftest.py pour sys.path."""
 from pptx import Presentation
+from pptx.enum.shapes import MSO_SHAPE, MSO_SHAPE_TYPE
 
 import build_ppt
 import render_agile
@@ -226,3 +227,35 @@ def test_status_external_labels_use_distinct_lanes_for_dense_segments():
     for i, a in enumerate(boxes):
         for b in boxes[i + 1:]:
             assert a[2] <= b[0] or b[2] <= a[0] or a[3] <= b[1] or b[3] <= a[1]
+
+
+def test_status_dense_workflow_keeps_external_labels_clear_of_cards():
+    prs = Presentation()
+    slide, ph = _blank_slide_with_placeholder(prs)
+    counts = {
+        "Bac à sable": 15,
+        "Affinage métier": 2,
+        "Affinage technique": 13,
+        "À faire": 14,
+        "En cours": 9,
+        "Attente validation PO": 10,
+        "Attente livraison": 2,
+        "Terminé(e)": 248,
+    }
+    data = {
+        "project_name": "Projet Test",
+        "metrics": {"status_counts_us": counts, "done_statuses_us": ["Terminé(e)"]},
+    }
+
+    render_agile.render_status(slide, ph, data, "unused.pptx", 1, 1)
+
+    label = next(
+        shape for shape in slide.shapes
+        if shape.has_text_frame and shape.text_frame.text == "Attente validation PO 10"
+    )
+    first_card_top = min(
+        shape.top for shape in slide.shapes
+        if shape.shape_type == MSO_SHAPE_TYPE.AUTO_SHAPE
+        and shape.auto_shape_type == MSO_SHAPE.ROUNDED_RECTANGLE
+    )
+    assert label.top + label.height <= first_card_top

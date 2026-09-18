@@ -59,9 +59,13 @@ TREND_PESSIMIST = RGBColor(0xC0, 0x39, 0x2B)
 TYPE_US = RGBColor(0x2E, 0x9E, 0x6B)        # vert
 TYPE_US_TECH = RGBColor(0xE0, 0xB0, 0x2E)   # jaune
 TYPE_SUBTASK = RGBColor(0x7F, 0xB2, 0xCE)   # bleu clair
-TYPE_EPIC = RGBColor(0x1F, 0x4E, 0x79)      # bleu foncé
+TYPE_EPIC = RGBColor(0x1F, 0x4E, 0x79)      # bleu foncé (brand)
 TYPE_ANOMALY = RGBColor(0xE6, 0x8A, 0x2E)   # orange
-TYPE_WORK = RGBColor(0x8A, 0x63, 0xA8)      # violet
+# Bleu marine, volontairement plus sombre/plus saturé que TYPE_EPIC pour
+# rester distinguable à côté de lui sur {{chart:types}} — remplace l'ancien
+# violet (0x8A63A8), à la demande du coach (distinction visuelle
+# sous-tâche/travaux sur {{chart:conso_corrective}}, voir CLAUDE.md).
+TYPE_WORK = RGBColor(0x0B, 0x2D, 0x4A)      # bleu marine
 TYPE_INCIDENT = RGBColor(0xC0, 0x39, 0x2B)  # rouge
 TYPE_OTHER = RGBColor(0x93, 0xA2, 0xB0)     # gris — type non reconnu
 

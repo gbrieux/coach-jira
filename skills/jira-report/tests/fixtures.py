@@ -11,7 +11,11 @@ DEFAULT_CONF = {
     "anomaly_types": [],
     "incident_types": [],
     "tech_types": [],
+    "subtask_types": [],
+    "work_types": [],
+    "defect_age_buckets": [1, 7, 15, 30],
     "sprint_duration_days": 21,
+    "dispersion_etapes": {},
 }
 
 
@@ -19,11 +23,14 @@ def make_issue(key, itype="User Story", status="Terminé(e)", status_id=None, cr
                 resolutiondate=None, sprints=None, sp=None,
                 timeoriginalestimate=None, timespent=None,
                 sprint_field="customfield_10020", story_points_field="customfield_10016",
-                status_history=None, id=None):
+                status_history=None, id=None, components=None, parent=None):
     """`status_history` (pour cumulative_flow_diagram.py) : liste de
     (date_iso, from_status, to_status) — un changelog JIRA minimal
     (expand=changelog) — ou, pour simuler un statut renommé depuis, de
-    (date_iso, from_id, from_status, to_id, to_status)."""
+    (date_iso, from_id, from_status, to_id, to_status). `components` : liste
+    de noms (str), reproduit la forme JIRA (liste d'objets {"name": ...}).
+    `parent` : (key, summary) — reproduit la forme JIRA abrégée
+    {"key": ..., "fields": {"summary": ...}}."""
     fields = {
         "issuetype": {"name": itype},
         "status": {"name": status, "id": status_id},
@@ -31,7 +38,11 @@ def make_issue(key, itype="User Story", status="Terminé(e)", status_id=None, cr
         "resolutiondate": resolutiondate,
         "timeoriginalestimate": timeoriginalestimate,
         "timespent": timespent,
+        "components": [{"name": c} for c in components] if components else [],
     }
+    if parent is not None:
+        pkey, psummary = parent
+        fields["parent"] = {"key": pkey, "fields": {"summary": psummary}}
     if sprints is not None:
         fields[sprint_field] = [{"name": s} for s in sprints]
     if sp is not None:

@@ -25,6 +25,14 @@ jql: 'project = XXX AND ...'           # la requête JIRA qui définit le périm
 # incident_types: ["Incident"]         # catégorie "incident" de {{chart:conso_corrective}}. Même règle.
 # tech_types: ["Technical Story"]      # catégorie "US tech" de {{chart:conso_corrective}} — US techniques
 #                                       # hors us_types (ex. "Technical Story", "Story Technique"...).
+# subtask_types: ["Sous-tâche"]        # catégorie "Sous-tâche" de {{chart:conso_corrective}}
+# work_types: ["Travaux"]              # catégorie "Travaux" de {{chart:conso_corrective}} ET 3e catégorie
+#                                       # ("travaux", en plus d'anomalie/incident) de
+#                                       # {{chart:defauts_delai_origine}} — champ partagé entre les deux.
+# defect_age_buckets: [1, 7, 15, 30]   # bornes (jours) des tranches d'ancienneté du backlog ouvert
+#                                       # affichées sur {{chart:defauts_tendance}} — reprend anomaly_types/
+#                                       # incident_types ci-dessus. [1,7,15,30] = 5 tranches (0-1j/2-7j/
+#                                       # 8-15j/16-30j/+30j). Défaut si absent : [1, 7, 15, 30].
 # seconds_per_day: 28800               # 8h ; ajuster si vos jours-homme sont sur une autre base
 # workflow:                            # statuts JIRA ordonnés (bac à sable -> terminé), pour que
 #   - "Bac à sable"                    # {{chart:status}} suive le workflow réel plutôt que la
@@ -43,3 +51,9 @@ jql: 'project = XXX AND ...'           # la requête JIRA qui définit le périm
 #       - "Terminé(e)"
 #   start_date: "2026-01-01"           # bornes de dates affichées (YYYY-MM-DD). Absent = première
 #   end_date: "2026-08-27"             # US créée -> aujourd'hui (comportement par défaut).
+# dispersion_etapes:                   # config optionnelle de {{chart:dispersion_etapes}} :
+#   min_transition_seconds: 300        # durée plancher (secondes) sous laquelle un intervalle clos
+#                                       # est ignoré — filtre le bruit d'automatisation JIRA (règle qui
+#                                       # transitionne un ticket en quelques secondes à sa création,
+#                                       # pas un vrai temps passé dans le statut). Défaut si absent : 300
+#                                       # (5 min).

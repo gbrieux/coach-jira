@@ -35,6 +35,12 @@ MAX_LEN = {
     "cycle_time_lecture": 220,
     "types_lecture": 250,
     "epics_lecture": 250,
+    "defauts_kpi_lecture": 220,
+    "defauts_tendance_lecture": 220,
+    "defauts_delai_origine_lecture": 220,
+    "dispersion_etapes_lecture": 220,
+    "temps_par_etape_lecture": 220,
+    "cumul_estimation_conso_lecture": 220,
 }
 LECTURE_VALUE_MAX = 150
 LECTURE_EXACT_COUNT = 5

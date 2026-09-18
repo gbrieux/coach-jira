@@ -1172,17 +1172,36 @@ def render_status(slide, placeholder_shape, data, template_path, page_num, total
     # des segments trop étroits pour leur texte à l'intérieur (voir plus
     # bas) — un statut avec peu de tickets ne doit jamais rester sans
     # étiquette visible.
-    # Deux rangées de libellés externes de chaque côté : trois petits segments
-    # consécutifs utilisent ainsi haut-proche, bas-proche, haut-éloigné sans se
-    # recouvrir (cas réel 4 / 2 / 1 US en début de barre).
-    ABOVE_H, GAP_BELOW = 68, 70
-    bar_y, bar_h = S.CONTENT_Y + ABOVE_H, 78
-
     segments, x = [], S.MARGIN_X
     for name, count in items:
         seg_w = S.CONTENT_W * count / total
         segments.append((name, count, x, seg_w))
         x += seg_w
+
+    # Dimensionner les deux zones de libellés selon la plus longue série de
+    # petits segments. Un workflow dense (7 petits statuts avant « Terminé »)
+    # nécessite davantage que les deux niveaux du cas nominal ; sans ce calcul,
+    # le troisième libellé sous la barre descend derrière la première rangée de
+    # cartes et le quatrième libellé supérieur remonte dans le titre.
+    tick_len, label_h = 10, 24
+    external_lane = 0
+    max_above = max_below = 0
+    for name, count, _seg_x, seg_w in segments:
+        label = f"{name} {count}"
+        if seg_w - 24 >= _text_w_px(label):
+            external_lane = 0
+            continue
+        level = external_lane // 2
+        required_h = tick_len + level * (label_h + 4) + label_h
+        if external_lane % 2 == 0:
+            max_above = max(max_above, required_h)
+        else:
+            max_below = max(max_below, required_h)
+        external_lane += 1
+
+    ABOVE_H = max(68, max_above + 8)
+    GAP_BELOW = max(70, max_below + 8)
+    bar_y, bar_h = S.CONTENT_Y + ABOVE_H, 78
 
     for name, count, seg_x, seg_w in segments:
         SH.add_rect(slide, seg_x, bar_y, max(seg_w, 1), bar_h, fill=colors[name], line_color=None)
@@ -1191,7 +1210,6 @@ def render_status(slide, placeholder_shape, data, template_path, page_num, total
     # étroits : libellé externe avec une amorce, au-dessus ou en dessous de
     # la barre — deux statuts étroits consécutifs alternent de côté pour ne
     # pas superposer leurs libellés.
-    tick_len, label_h = 10, 24
     external_lane = 0
     for name, count, seg_x, seg_w in segments:
         color = colors[name]
@@ -1340,9 +1358,398 @@ def render_sprint_spread(slide, placeholder_shape, data, template_path, page_num
     SH.add_footer(slide, project_name, page_num, total_pages)
 
 
+# ========================================================= dispersion_etapes
+def render_dispersion_etapes(slide, placeholder_shape, data, template_path, page_num, total_pages):
+    m = data["metrics"]
+    project_name = data["project_name"].strip()
+    SH.clear_legacy_chrome(slide)
+    SH.clear_placeholder(placeholder_shape)
+
+    disp = m.get("dispersion_etapes")
+    if not disp:
+        SH.add_header(slide, "CONFIGURATION MANQUANTE", "Dispersion par étape", template_path)
+        SH.add_text(slide, S.MARGIN_X, S.CONTENT_Y + 40, S.CONTENT_W, 100,
+                    "Le workflow (project.yaml, champ `workflow`) doit être configuré, et au "
+                    "moins un statut doit avoir été quitté par une US, pour tracer la "
+                    "dispersion — voir SKILL.md.",
+                    size=S.SIZE_BODY, color=S.TEXT_SECONDARY)
+        SH.add_footer(slide, project_name, page_num, total_pages)
+        return
+
+    items = disp["items"]
+    group_labels = disp["group_labels"]
+    SH.add_header(slide, f"{disp['us_count']} US MESURÉES", "Dispersion par étape", template_path)
+
+    # Couleurs de groupe — les mêmes que {{chart:cumulative_flow_diagram}}
+    # pour ces mêmes groupes (voir indicators/dispersion_etapes.py docstring),
+    # jamais une palette propre à cette slide.
+    group_colors = _cfd_palette(len(group_labels))
+    grouped = len(group_labels) < len(items)  # cfd.groups réellement configuré
+
+    lecture = (data.get("coaching") or {}).get("dispersion_etapes_lecture", "")
+    legend_h = 60 if lecture else 0
+    avail_h = S.CONTENT_H - legend_h
+
+    LABEL_W, VALUE_W = 230, 100
+    plot_x0 = S.MARGIN_X + LABEL_W
+    plot_w = S.CONTENT_W - LABEL_W - VALUE_W
+
+    # Échelle dérivée du p75 (pas du p90) : la boîte p25-p75 tient donc
+    # toujours entière dans l'axe, quel que soit le projet. Un p90 isolé très
+    # étiré (ex. une US restée des mois en "Bac à sable") ne doit pas dicter
+    # l'échelle de toutes les lignes — sinon les statuts à faible dispersion
+    # s'écrasent tous près de 0, illisibles (retour QA réel, voir
+    # SKILL.md/Historique). La moustache p90 qui dépasse l'axe est coupée
+    # (xpos() la plafonne au bord du graphique) et signalée par une flèche +
+    # sa vraie valeur en texte, jamais silencieusement tronquée.
+    axis_max_raw = max(r["p75"] for r in items) or 1
+    step = _nice_step(axis_max_raw / 6)
+    axis_max = max(step, math.ceil(axis_max_raw / step) * step)
+    has_clipped = any(r["p90"] > axis_max for r in items)
+
+    def xpos(v):
+        return plot_x0 + plot_w * min(v / axis_max, 1) if axis_max else plot_x0
+
+    # Rangée d'en-tête du graphique — légende de groupe à gauche (si
+    # `cfd.groups` configuré) et note sur les moustaches coupées à droite (si
+    # au moins un p90 dépasse l'échelle) : les deux tiennent sur la même
+    # ligne, l'une n'exclut jamais l'autre.
+    top_row_h = 34 if (grouped or has_clipped) else 0
+    row_area_y = S.CONTENT_Y + top_row_h
+    axis_h = 40
+    row_area_h = avail_h - top_row_h - axis_h
+    n = len(items)
+    row_h = row_area_h / n
+
+    if grouped:
+        lx = plot_x0
+        for gi, label in enumerate(group_labels):
+            SH.add_rect(slide, lx, S.CONTENT_Y + 6, 14, 14, fill=group_colors[gi], line_color=None)
+            SH.add_text(slide, lx + 20, S.CONTENT_Y, 180, 26, label, size=Pt(10.5),
+                        color=S.TEXT_SECONDARY, anchor=MSO_ANCHOR.MIDDLE)
+            lx += 20 + _text_w_px(label, font_px=21) + 40
+    if has_clipped:
+        SH.add_text(slide, plot_x0, S.CONTENT_Y, plot_w + VALUE_W, 26,
+                    "→ p90 réel au-delà de l'échelle affichée", size=Pt(10),
+                    color=S.TEXT_FOOTER, align=PP_ALIGN.RIGHT, anchor=MSO_ANCHOR.MIDDLE)
+
+    for i, r in enumerate(items):
+        ry = row_area_y + i * row_h
+        track_y = ry + row_h / 2
+        color = group_colors[r["group_index"]]
+
+        SH.add_text(slide, S.MARGIN_X, ry, LABEL_W - 14, row_h, r["name"], size=Pt(12),
+                    color=S.BRAND_PRIMARY, bold=True, anchor=MSO_ANCHOR.MIDDLE)
+
+        box_h = min(32, row_h * 0.6)
+        cap_h = min(18, row_h * 0.4)
+
+        whisker_x0, whisker_x1 = xpos(r["p10"]), xpos(r["p90"])
+        whisker = SH.add_rect(slide, whisker_x0, track_y - 1.5, max(whisker_x1 - whisker_x0, 2), 3,
+                               fill=color, line_color=None)
+        SH.set_transparency(whisker, 45)
+        left_cap = SH.add_rect(slide, whisker_x0 - 1.5, track_y - cap_h / 2, 3, cap_h,
+                                fill=color, line_color=None)
+        SH.set_transparency(left_cap, 45)
+
+        # p10 tient toujours dans l'axe (p10 <= p75 <= axis_max) — seul le
+        # p90 peut dépasser, jamais le p10 : pas de symétrie à gérer ici. La
+        # flèche (jamais un simple embout) + la vraie valeur en texte évitent
+        # de faire croire que la dispersion s'arrête au bord du graphique.
+        if r["p90"] > axis_max:
+            arrow_w, arrow_h = 14, 18
+            arrow = slide.shapes.add_shape(
+                MSO_SHAPE.ISOSCELES_TRIANGLE, S.px(whisker_x1 - arrow_w / 2),
+                S.px(track_y - arrow_h / 2), S.px(arrow_w), S.px(arrow_h))
+            arrow.rotation = 90
+            arrow.fill.solid()
+            arrow.fill.fore_color.rgb = color
+            arrow.line.fill.background()
+            arrow.shadow.inherit = False
+            # Flush avec le bord de la barre, sur la même ligne (pas au-dessus) —
+            # retour QA : un libellé décalé en haut à droite se lisait comme
+            # décroché de la moustache qu'il annote.
+            SH.add_text(slide, whisker_x1 + arrow_w / 2 + 4, track_y - 9, VALUE_W - arrow_w - 8, 18,
+                        f"{_fr_num(r['p90'], 0)} j", size=Pt(9), color=S.TEXT_FOOTER,
+                        bold=True, anchor=MSO_ANCHOR.MIDDLE, word_wrap=False)
+        else:
+            right_cap = SH.add_rect(slide, whisker_x1 - 1.5, track_y - cap_h / 2, 3, cap_h,
+                                     fill=color, line_color=None)
+            SH.set_transparency(right_cap, 45)
+
+        box_x0, box_x1 = xpos(r["p25"]), xpos(r["p75"])
+        SH.add_rounded_rect(slide, box_x0, track_y - box_h / 2, max(box_x1 - box_x0, 4), box_h,
+                             fill=color, line_color=None, radius_px=6)
+        med_x = xpos(r["median"])
+        SH.add_rect(slide, med_x - 1.5, track_y - box_h / 2 - 4, 3, box_h + 8,
+                     fill=_contrast_text_color(color), line_color=None)
+        # Valeur médiane juste sous la barre, centrée sur le trait médian —
+        # plus l'ancienne colonne de droite, qui la désolidarisait visuellement
+        # de sa propre barre (retour QA).
+        SH.add_text(slide, med_x - 45, track_y + box_h / 2 + 4, 90, 20,
+                    f"{_fr_num(r['median'])} j", size=Pt(11), color=S.TEXT_PRIMARY, bold=True,
+                    align=PP_ALIGN.CENTER)
+
+    axis_y = row_area_y + row_h * n + 10
+    SH.add_rect(slide, plot_x0, axis_y, plot_w, 1.5, fill=S.CARD_BORDER, line_color=None)
+    n_ticks = round(axis_max / step) if step else 0
+    for i in range(n_ticks + 1):
+        v = i * step
+        tx = xpos(v)
+        SH.add_text(slide, tx - 30, axis_y + 10, 60, 24, f"{v:g} j", size=Pt(9),
+                    color=S.TEXT_FOOTER, align=PP_ALIGN.CENTER)
+
+    if lecture:
+        sep_y = S.CONTENT_Y + avail_h + 14
+        SH.add_rect(slide, S.MARGIN_X, sep_y, S.CONTENT_W, 1.5, fill=S.CARD_BORDER, line_color=None)
+        SH.add_text(slide, S.MARGIN_X, sep_y + 14, S.CONTENT_W, legend_h - 14,
+                    lecture, size=S.SIZE_BODY, color=S.TEXT_SECONDARY)
+
+    SH.add_footer(slide, project_name, page_num, total_pages)
+
+
 # ===================================================================== CFD
 def _lerp_color(c1, c2, t):
     return RGBColor(*(round(c1[k] + (c2[k] - c1[k]) * t) for k in range(3)))
+
+
+# =============================================================== temps_par_etape
+TEMPS_PAR_ETAPE_CAPTION = (
+    "Une seule mesure partout : la médiane du temps passé dans l'étape, calculée sur les "
+    "tickets qui y passent réellement. La barre du haut est le workflow global, celle du bas "
+    "le détail des statuts qu'elle englobe, et l'axe cumule ces médianes de la création à la "
+    "livraison. Les statuts d'attente sont traités comme du travail en cours, sans "
+    "distinction visuelle."
+)
+
+
+def _shade_gradient(base_color, n):
+    """n teintes d'un même groupe (clair -> la couleur de base), pour distinguer les
+    statuts d'un même groupe sur la barre détaillée sans sortir de sa famille de
+    couleur (barre macro juste au-dessus, même couleur de base)."""
+    if n <= 1:
+        return [base_color]
+    return [_lerp_color(S.TEXT_WHITE, base_color, 0.3 + 0.7 * i / (n - 1)) for i in range(n)]
+
+
+def _step_card(slide, x, y, w, h, badge_n, name, value, sub, accent):
+    """Carte compacte statut (badge + nom, grande valeur, légende, filet
+    d'accent) — plus dense que `_card_stat` (pensé pour 3-4 cartes par ligne
+    plutôt qu'une poignée de cartes pleine hauteur)."""
+    SH.add_rounded_rect(slide, x, y, w, h)
+    pad = 16
+    SH.add_text(slide, x + pad, y + pad - 2, w - 2 * pad, 20, f"{badge_n}  {name}",
+                size=Pt(10), color=S.BRAND_PRIMARY, bold=True, all_caps=True, word_wrap=False)
+    SH.add_text(slide, x + pad, y + pad + 18, w - 2 * pad, 34, value,
+                size=Pt(19), color=S.BRAND_PRIMARY, bold=True)
+    sub_y = y + pad + 52
+    SH.add_text(slide, x + pad, sub_y, w - 2 * pad, max(h - pad - 52 - 16, 20), sub,
+                size=Pt(8.5), color=S.TEXT_SECONDARY)
+    SH.add_rect(slide, x + pad, y + h - 12, w - 2 * pad, 3, fill=accent, line_color=None)
+
+
+def render_temps_par_etape(slide, placeholder_shape, data, template_path, page_num, total_pages):
+    m = data["metrics"]
+    project_name = data["project_name"].strip()
+    SH.clear_legacy_chrome(slide)
+    SH.clear_placeholder(placeholder_shape)
+
+    tpe = m.get("temps_par_etape")
+    if not tpe:
+        SH.add_header(slide, "CONFIGURATION MANQUANTE", "Où passe le temps, étape par étape", template_path)
+        SH.add_text(slide, S.MARGIN_X, S.CONTENT_Y + 40, S.CONTENT_W, 100,
+                    "Le workflow (project.yaml, champ `workflow`) doit être configuré, et au "
+                    "moins un statut doit avoir été quitté par une US, pour tracer le parcours — "
+                    "voir SKILL.md.",
+                    size=S.SIZE_BODY, color=S.TEXT_SECONDARY)
+        SH.add_footer(slide, project_name, page_num, total_pages)
+        return
+
+    items = tpe["items"]
+    groups = tpe["groups"]
+    group_labels = tpe["group_labels"]
+    total = tpe["total_median"]
+    SH.add_header(slide, f"PARCOURS MÉDIAN {_fr_num(total)} J", "Où passe le temps, étape par étape",
+                  template_path)
+
+    # Mêmes couleurs de groupe que {{chart:cumulative_flow_diagram}}/
+    # {{chart:dispersion_etapes}} pour ces mêmes groupes — jamais une palette
+    # propre à cette slide (voir indicators/temps_par_etape.py docstring).
+    group_colors = _cfd_palette(len(group_labels))
+    badge = {it["name"]: i + 1 for i, it in enumerate(items)}
+    members_by_group = {}
+    for it in items:
+        members_by_group.setdefault(it["group_index"], []).append(it)
+
+    lecture = (data.get("coaching") or {}).get("temps_par_etape_lecture", "")
+    footer_text = (
+        f"Médianes calculées sur les {tpe['us_count']} tickets de la période. Elles ne "
+        f"s'additionnent pas exactement : le cumul de {_fr_num(total)} j décrit un parcours "
+        "type, pas la moyenne réelle du lead time affichée en haut."
+    )
+
+    # ---------------------------------------------------------- budget vertical
+    CAPTION_H, BRACKETS_H, MACRO_H, DETAIL_H, AXIS_H = 72, 68, 42, 48, 24
+    GAP1, GAP2, GAP3, GAP4, GAP5 = 10, 14, 14, 16, 14
+    SECTION_GAP = 10
+    FOOTER_H = 54
+    LECTURE_GAP = 10
+    LECTURE_H = 40 if lecture else 0
+    fixed_h = (CAPTION_H + GAP1 + BRACKETS_H + GAP2 + MACRO_H + GAP3 + DETAIL_H + GAP4
+               + AXIS_H + GAP5 + FOOTER_H + (LECTURE_GAP + LECTURE_H if lecture else 0))
+    sections_h = max(S.CONTENT_H - fixed_h, 240)
+    section_h = (sections_h - SECTION_GAP * (len(groups) - 1)) / len(groups)
+
+    plot_x0, plot_w = S.MARGIN_X, S.CONTENT_W
+
+    def xpos(cum):
+        return plot_x0 + plot_w * min(cum / total, 1) if total else plot_x0
+
+    y = S.CONTENT_Y
+    SH.add_text(slide, S.MARGIN_X, y, S.CONTENT_W, CAPTION_H, TEMPS_PAR_ETAPE_CAPTION,
+                size=Pt(11), color=S.TEXT_SECONDARY)
+    y += CAPTION_H + GAP1
+
+    # ------------------------------------------------------------- brackets
+    def _bracket(x0, x1, label, color, ty):
+        line_y = ty + 18
+        SH.add_text(slide, x0, ty, x1 - x0, 16, label, size=Pt(10), color=color,
+                    bold=(color != S.TEXT_SECONDARY), align=PP_ALIGN.CENTER, word_wrap=False)
+        SH.add_rect(slide, x0, line_y, max(x1 - x0, 1.5), 1.5, fill=color, line_color=None)
+        SH.add_rect(slide, x0, line_y - 6, 1.5, 6, fill=color, line_color=None)
+        SH.add_rect(slide, x1 - 1.5, line_y - 6, 1.5, 6, fill=color, line_color=None)
+
+    _bracket(plot_x0, plot_x0 + plot_w, f"Parcours médian {_fr_num(total)} j", S.TEXT_SECONDARY, y)
+    # "Dont <2e groupe et suivants>" — tout ce qui suit le 1er groupe affiché
+    # (le 1er groupe, dans l'ordre du workflow, est par construction l'amont
+    # pas-encore-démarré ; le reste est "en cours" au sens large, quel que
+    # soit le libellé exact configuré dans `cfd.groups`).
+    if len(groups) >= 2:
+        sub_from = groups[0]["median_sum"]
+        sub_total = round(total - sub_from, 1)
+        sub_label = groups[1]["label"] if len(groups) == 2 else "la suite du parcours"
+        _bracket(xpos(sub_from), xpos(total), f"Dont {sub_label} {_fr_num(sub_total)} j",
+                  S.BRAND_PRIMARY, y + 36)
+    y += BRACKETS_H
+
+    # -------------------------------------------------------------- barre macro
+    seg_x = plot_x0
+    for g in groups:
+        seg_w = plot_w * (g["median_sum"] / total) if total else 0
+        color = group_colors[g["group_index"]]
+        SH.add_rect(slide, seg_x, y, max(seg_w, 1), MACRO_H, fill=color, line_color=None)
+        text_color = _contrast_text_color(color)
+        value_txt = f"{_fr_num(g['median_sum'])} j · {g['pct']} %"
+        if seg_w - 24 >= _text_w_px(g["label"], font_px=24) + _text_w_px(value_txt, font_px=22) + 20:
+            SH.add_text(slide, seg_x + 12, y, seg_w - 24, MACRO_H, g["label"], size=Pt(12),
+                        color=text_color, bold=True, anchor=MSO_ANCHOR.MIDDLE, word_wrap=False)
+            SH.add_text(slide, seg_x + 12, y, seg_w - 24, MACRO_H, value_txt, size=Pt(11),
+                        color=text_color, align=PP_ALIGN.RIGHT, anchor=MSO_ANCHOR.MIDDLE, word_wrap=False)
+        seg_x += seg_w
+    y += MACRO_H + GAP3
+
+    # ------------------------------------------------------------- barre détail
+    shade_map = {}
+    for gi, members in members_by_group.items():
+        for member, color in zip(members, _shade_gradient(group_colors[gi], len(members))):
+            shade_map[member["name"]] = color
+
+    seg_x = plot_x0
+    for it in items:
+        seg_w = plot_w * (it["median"] / total) if total else 0
+        color = shade_map[it["name"]]
+        SH.add_rect(slide, seg_x, y, max(seg_w, 1), DETAIL_H, fill=color, line_color=None)
+        text_color = _contrast_text_color(color)
+        value_txt = f"{_fr_num(it['median'])} j"
+        name_fits = seg_w - 10 >= _text_w_px(it["name"], font_px=19)
+        if name_fits:
+            SH.add_text(slide, seg_x, y + 4, seg_w, 18, it["name"], size=Pt(9.5),
+                        color=text_color, align=PP_ALIGN.CENTER, word_wrap=False)
+            SH.add_text(slide, seg_x, y + 23, seg_w, 22, value_txt, size=Pt(12),
+                        color=text_color, bold=True, align=PP_ALIGN.CENTER, word_wrap=False)
+        elif seg_w - 6 >= _text_w_px(value_txt, font_px=22):
+            # Même ligne de base que la valeur du cas à 2 lignes (y+23) — pas
+            # centré sur toute la hauteur, sinon les segments trop étroits
+            # pour leur nom affichent leur valeur décalée par rapport aux
+            # segments voisins (retour QA).
+            SH.add_text(slide, seg_x, y + 23, seg_w, 22, value_txt, size=Pt(11),
+                        color=text_color, bold=True, align=PP_ALIGN.CENTER, word_wrap=False)
+        seg_x += seg_w
+    y += DETAIL_H + GAP4
+
+    # ------------------------------------------------------------------ axe
+    SH.add_rect(slide, plot_x0, y, plot_w, 1.5, fill=S.CARD_BORDER, line_color=None)
+    step = _nice_step(total / 8) if total else 1
+    n_ticks = math.floor(total / step) if step else 0
+    for i in range(n_ticks + 1):
+        v = i * step
+        tx = xpos(v)
+        SH.add_text(slide, tx - 25, y + 8, 50, 18, f"{v:g} j", size=Pt(9),
+                    color=S.TEXT_FOOTER, align=PP_ALIGN.CENTER, word_wrap=False)
+    y += AXIS_H + GAP5
+
+    # ------------------------------------------------------- sections/cartes
+    pad = 20
+    for gi_pos, g in enumerate(groups):
+        color = group_colors[g["group_index"]]
+        members = members_by_group[g["group_index"]]
+        SH.add_rounded_rect(slide, plot_x0, y, plot_w, section_h, fill=S.CARD_BG,
+                             line_color=color, line_width_pt=1.5)
+        SH.add_text(slide, plot_x0 + pad, y + 12, 500, 24,
+                    f"{g['label']} · {g['n_statuses']} statuts", size=Pt(12),
+                    color=S.BRAND_PRIMARY, bold=True, word_wrap=False)
+        SH.add_text(slide, plot_x0 + plot_w - pad - 260, y + 12, 260, 24,
+                    f"{_fr_num(g['median_sum'])} j · {g['pct']} %", size=Pt(12),
+                    color=S.TEXT_SECONDARY, align=PP_ALIGN.RIGHT, word_wrap=False)
+
+        cards_y = y + 44
+        cards_h = section_h - 44 - 16
+        gap, n = 14, len(members)
+        card_w = (plot_w - 2 * pad - gap * (n - 1)) / n
+        for i, it in enumerate(members):
+            cx = plot_x0 + pad + i * (card_w + gap)
+            # "passages", pas "tickets" : un ticket qui repasse plusieurs fois par ce
+            # statut (aller-retour dans le workflow) y contribue une fois par visite,
+            # pas une fois au total — `it["count"]` compte les visites mesurées, pas
+            # les tickets distincts (celui-ci vit dans `us_count`, au pied de slide).
+            _step_card(slide, cx, cards_y, card_w, cards_h, badge[it["name"]], it["name"],
+                       f"{_fr_num(it['median'])} j", f"sur {it['count']} passages mesurés",
+                       shade_map[it["name"]])
+        y += section_h + (SECTION_GAP if gi_pos < len(groups) - 1 else 0)
+
+    # --------------------------------------------------------------- pied
+    SH.add_rect(slide, S.MARGIN_X, y, S.CONTENT_W, 1.5, fill=S.CARD_BORDER, line_color=None)
+    SH.add_text(slide, S.MARGIN_X, y + 10, S.CONTENT_W, FOOTER_H - 10, footer_text,
+                size=Pt(9.5), color=S.TEXT_FOOTER)
+    y += FOOTER_H
+    if lecture:
+        SH.add_text(slide, S.MARGIN_X, y + LECTURE_GAP, S.CONTENT_W, LECTURE_H,
+                    lecture, size=S.SIZE_BODY, color=S.TEXT_SECONDARY)
+
+    SH.add_footer(slide, project_name, page_num, total_pages)
+
+
+def _age_severity_palette(n):
+    """Dégradé rose pâle (tranche la plus récente) -> rouge (la plus
+    ancienne), pour les tranches d'ancienneté du backlog Défauts (voir
+    render_defauts_tendance) — sémantique différente du dégradé neutre de
+    _cfd_palette/sprint_spread (ici, plus c'est ancien, plus c'est alarmant).
+    Multi-stops (pas un simple 2 couleurs) : un dégradé à 2 points sur une
+    plage aussi large donnait des tons médians trop proches les uns des
+    autres pour distinguer par ex. 8-15j de 16-30j (retour QA) — les stops
+    intermédiaires (ALERT_BORDER, BRAND_ACCENT) marquent des paliers de
+    couleur nets plutôt qu'un fondu continu."""
+    stops = [S.ALERT_BG, S.ALERT_BORDER, S.BRAND_ACCENT, S.ALERT_TEXT]
+    if n <= 1:
+        return [stops[-1]]
+    n_segs = len(stops) - 1
+    colors = []
+    for i in range(n):
+        t = i / (n - 1) * n_segs
+        seg = min(int(t), n_segs - 1)
+        frac = t - seg
+        colors.append(_lerp_color(stops[seg], stops[seg + 1], frac))
+    return colors
 
 
 def _cfd_palette(n_stages):
@@ -1442,6 +1849,92 @@ def render_cfd(slide, placeholder_shape, data, template_path, page_num, total_pa
                f"{totals['in_progress']} US", _pct(totals["in_progress"]))
     y += card_h + 20
     _card_stat(slide, RAIL_X, y, RAIL_W, card_h, "TERMINÉ", f"{totals['done']} US", _pct(totals["done"]))
+
+    SH.add_footer(slide, project_name, page_num, total_pages)
+
+
+def render_cumul_estimation_conso(slide, placeholder_shape, data, template_path, page_num, total_pages):
+    m = data["metrics"]
+    project_name = data["project_name"].strip()
+    SH.clear_legacy_chrome(slide)
+    SH.clear_placeholder(placeholder_shape)
+
+    cec = m.get("cumul_estimation_conso")
+    if not cec:
+        SH.add_header(slide, "", "Estimation vs consommé cumulés", template_path)
+        SH.add_text(slide, S.MARGIN_X, S.CONTENT_Y + 40, S.CONTENT_W, 60,
+                    "Pas assez de données (aucune estimation/consommation ni date de "
+                    "création exploitable) pour tracer cet indicateur.",
+                    size=S.SIZE_BODY, color=S.TEXT_SECONDARY)
+        SH.add_footer(slide, project_name, page_num, total_pages)
+        return
+
+    categories = cec["categories"]
+    surtitre = f"{categories[0]} → {categories[-1]}".upper()
+    SH.add_header(slide, surtitre, "Estimation vs consommé cumulés", template_path)
+
+    cd = CategoryChartData()
+    cd.categories = categories
+    cd.add_series("Estimé (hors Epic)", cec["estime_jh"])
+    cd.add_series("Consommé (hors Epic)", cec["consomme_jh"])
+    cd.add_series("Estimé Epics", cec["estime_epics_jh"])
+
+    gf = slide.shapes.add_chart(XL_CHART_TYPE.LINE, S.px(S.MARGIN_X), S.px(S.CONTENT_Y),
+                                 S.px(CHART_W), S.px(S.CONTENT_H), cd)
+    chart = gf.chart
+    chart.has_title = False
+    plots = chart.plots[0]
+    plots.gap_width = 0
+
+    x_frac, y_frac, w_frac, h_frac = 0.02, 0.03, 0.96, 0.80
+    _set_manual_plot_area(chart, x_frac, y_frac, w_frac, h_frac)
+
+    series = plots.series
+    _style_line_series(series[0], S.BRAND_PRIMARY, 3)
+    _style_line_series(series[1], S.BRAND_ACCENT, 3)
+    _style_line_series(series[2], S.TREND_OPTIMIST, 3, dash=MSO_LINE_DASH_STYLE.DASH)
+
+    chart.has_legend = True
+    chart.legend.position = XL_LEGEND_POSITION.BOTTOM
+    chart.legend.include_in_layout = False
+    chart.legend.font.size = S.SIZE_LEGEND
+    chart.legend.font.color.rgb = S.TEXT_PRIMARY
+
+    cat_ax = chart.category_axis
+    cat_ax.format.line.color.rgb = S.CARD_BORDER
+    cat_ax.tick_labels.font.size = Pt(9.5)
+    cat_ax.tick_labels.font.color.rgb = S.TEXT_FOOTER
+    skip = max(1, round(len(categories) / 12))
+    ax_el = cat_ax._element
+    tls = ax_el.find(qn("c:tickLblSkip"))
+    if tls is None:
+        tls = ax_el.makeelement(qn("c:tickLblSkip"), {})
+        ax_el.append(tls)
+    tls.set("val", str(skip))
+
+    val_ax = chart.value_axis
+    val_ax.has_major_gridlines = True
+    val_ax.major_gridlines.format.line.color.rgb = S.CARD_BORDER_INNER
+    val_ax.tick_labels.font.size = Pt(9.5)
+    val_ax.tick_labels.font.color.rgb = S.TEXT_FOOTER
+    val_ax.format.line.fill.background()
+
+    # ------------------------------------------------------------ rail droit
+    card_h = (S.CONTENT_H - 3 * 20) / 4
+    y = S.CONTENT_Y
+    _card_stat(slide, RAIL_X, y, RAIL_W, card_h, "ESTIMÉ (HORS EPIC)",
+               f"{_fr_num(cec['total_estime_jh'])} jh", "")
+    y += card_h + 20
+    _card_stat(slide, RAIL_X, y, RAIL_W, card_h, "CONSOMMÉ (HORS EPIC)",
+               f"{_fr_num(cec['total_consomme_jh'])} jh",
+               f"écart : {_fr_num(cec['ecart_conso_estime_jh'])} jh")
+    y += card_h + 20
+    _card_stat(slide, RAIL_X, y, RAIL_W, card_h, "ESTIMÉ EPICS",
+               f"{_fr_num(cec['total_estime_epics_jh'])} jh", "")
+    y += card_h + 20
+    _card_stat(slide, RAIL_X, y, RAIL_W, card_h, "ÉCART EPICS / DÉTAIL",
+               f"{_fr_num(cec['ecart_epics_detail_jh'])} jh",
+               "estimé Epics − estimé détaillé")
 
     SH.add_footer(slide, project_name, page_num, total_pages)
 
@@ -1760,8 +2253,9 @@ def render_conso_corrective(slide, placeholder_shape, data, template_path, page_
         SH.add_header(slide, "AUCUNE DONNÉE", "Charge corrective (anomalie / incident)", template_path)
         SH.add_text(slide, S.MARGIN_X, S.CONTENT_Y + 40, S.CONTENT_W, 100,
                     "Aucun ticket terminé avec date de résolution et jours-homme consommés "
-                    "dans les catégories anomalie / incident / Us / US tech (anomaly_types, "
-                    "incident_types, tech_types, us_types dans project.yaml).",
+                    "dans les catégories anomalie / incident / Us / US tech / Sous-tâche / "
+                    "Travaux (anomaly_types, incident_types, tech_types, us_types, "
+                    "subtask_types, work_types dans project.yaml).",
                     size=S.SIZE_BODY, color=S.TEXT_SECONDARY)
         SH.add_footer(slide, project_name, page_num, total_pages)
         return
@@ -1769,11 +2263,13 @@ def render_conso_corrective(slide, placeholder_shape, data, template_path, page_
     surtitre = f"{_fr_num(cc['corrective_pct'], 0)} % CORRECTIF · {_fr_num(cc['total_jh'])} JH"
     SH.add_header(slide, surtitre, "Charge consommée sur tickets terminés, par mois", template_path)
 
-    ORDER = ["anomalie", "incident", "us", "us_tech"]
+    ORDER = ["anomalie", "incident", "us", "us_tech", "sous_tache", "travaux"]
     LABELS = {"anomalie": "Conso anomalie", "incident": "Conso incident",
-              "us": "Conso Us", "us_tech": "Conso US tech"}
+              "us": "Conso Us", "us_tech": "Conso US tech",
+              "sous_tache": "Conso sous-tâche", "travaux": "Conso travaux"}
     COLORS = {"anomalie": S.TYPE_ANOMALY, "incident": S.TYPE_INCIDENT,
-              "us": S.TYPE_US, "us_tech": S.TYPE_US_TECH}
+              "us": S.TYPE_US, "us_tech": S.TYPE_US_TECH,
+              "sous_tache": S.TYPE_SUBTASK, "travaux": S.TYPE_WORK}
 
     cd = CategoryChartData()
     cd.categories = cc["categories"]
@@ -1826,13 +2322,445 @@ def render_conso_corrective(slide, placeholder_shape, data, template_path, page_
                f"{_fr_num(cc['corrective_jh'])} jh anomalie + incident")
     y += 174 + 20
     _card_stat(slide, RAIL_X, y, RAIL_W, 174, "TOTAL CONSOMMÉ",
-               f"{_fr_num(cc['total_jh'])} jh", "sur tickets terminés, 4 catégories")
+               f"{_fr_num(cc['total_jh'])} jh", "sur tickets terminés, 6 catégories")
     y += 174 + 20
     lecture = (data.get("coaching") or {}).get("conso_corrective_lecture", "")
     if lecture:
         rail_rest_h = S.CONTENT_H - 174 * 2 - 40
         SH.add_rounded_rect(slide, RAIL_X, y, RAIL_W, rail_rest_h)
         SH.add_text(slide, RAIL_X + 20, y + 20, RAIL_W - 40, rail_rest_h - 40,
+                    lecture, size=S.SIZE_BODY, color=S.TEXT_SECONDARY)
+
+    SH.add_footer(slide, project_name, page_num, total_pages)
+
+
+# =========================================================== défauts (ano/inc)
+# Accords grammaticaux (fém. anomalie / masc. incident) centralisés ici —
+# voir indicators/defauts_kpi.py, defauts_tendance.py, defauts_delai_origine.py.
+DEFECT_META = {
+    "anomalie": {"label": "Anomalies", "color": S.TYPE_ANOMALY, "e": "e"},
+    "incident": {"label": "Incidents", "color": S.TYPE_INCIDENT, "e": ""},
+}
+
+
+def _defect_word(base, meta, n):
+    return f"{base}{meta['e']}{'' if n == 1 else 's'}"
+
+
+def render_defauts_kpi(slide, placeholder_shape, data, template_path, page_num, total_pages):
+    m = data["metrics"]
+    project_name = data["project_name"].strip()
+    SH.clear_legacy_chrome(slide)
+    SH.clear_placeholder(placeholder_shape)
+
+    dk = m.get("defauts_kpi")
+    gen_date = _parse_iso(data["generated_at"])
+    if not dk:
+        SH.add_header(slide, f"À DATE · {_ddmmyyyy(gen_date)}", "Indicateurs clés · Qualité", template_path)
+        SH.add_text(slide, S.MARGIN_X, S.CONTENT_Y + 40, S.CONTENT_W, 100,
+                    "Aucun ticket anomalie/incident dans le périmètre (anomaly_types/"
+                    "incident_types vides ou non renseignés dans project.yaml).",
+                    size=S.SIZE_BODY, color=S.TEXT_SECONDARY)
+        SH.add_footer(slide, project_name, page_num, total_pages)
+        return
+
+    surtitre = f"FENÊTRE {dk['window_months']} MOIS · À DATE {_ddmmyyyy(gen_date)}"
+    SH.add_header(slide, surtitre, "Indicateurs clés · Qualité", template_path)
+
+    lecture = (data.get("coaching") or {}).get("defauts_kpi_lecture", "")
+    legend_h = 70 if lecture else 0
+    avail_h = S.CONTENT_H - legend_h
+    gap = 24
+    row_group_h = (avail_h - gap) / 2
+    head_h = 34
+    card_h = row_group_h - head_h - 10
+    card_w = (S.CONTENT_W - 3 * gap) / 4
+
+    for i, cat in enumerate(("anomalie", "incident")):
+        meta = DEFECT_META[cat]
+        d = dk[cat]
+        row_y = S.CONTENT_Y + i * (row_group_h + gap)
+
+        SH.add_rect(slide, S.MARGIN_X, row_y + 6, 14, 14, fill=meta["color"], line_color=None)
+        SH.add_text(slide, S.MARGIN_X + 24, row_y, 300, head_h, meta["label"],
+                    size=Pt(14), color=S.BRAND_PRIMARY, bold=True)
+        created_w = _defect_word("créé", meta, d["created"])
+        resolved_w = _defect_word("résolu", meta, d["resolved"])
+        open_w = _defect_word("ouvert", meta, d["open_now"])
+        stats_line = f"{d['created']} {created_w} · {d['resolved']} {resolved_w} · {d['open_now']} {open_w} à date"
+        SH.add_text(slide, S.MARGIN_X + 340, row_y, S.CONTENT_W - 340, head_h, stats_line,
+                    size=Pt(12), color=S.TEXT_SECONDARY, anchor=MSO_ANCHOR.BOTTOM)
+
+        cards_y = row_y + head_h + 10
+        open90_w = _defect_word("ouvert", meta, d["open_over_90d"])
+        cards = [
+            (f"{meta['label']} {created_w}", str(d["created"]),
+             f"soit {_fr_num(d['per_month'], 1)}/mois en moyenne"),
+            ("Charge consommée", f"{_fr_num(d['jh'])} j",
+             f"{_fr_num(d['jh_per_resolved'], 2)} j par ticket résolu" if d["jh_per_resolved"] is not None
+             else "aucune résolution sur la fenêtre"),
+            ("Taux de défaut", f"{_fr_num(d['defect_rate_pct'], 1)} %",
+             f"{_fr_num(d['jh'])} j d'{meta['label'].lower()} ÷ {_fr_num(dk['total_jh'])} j consommés"),
+            ("Backlog ouvert à date", str(d["open_now"]),
+             f"dont {d['open_over_90d']} {open90_w} depuis +90 j"),
+        ]
+        for c, (label, big, sub) in enumerate(cards):
+            x = S.MARGIN_X + c * (card_w + gap)
+            _card_kpi_accent(slide, x, cards_y, card_w, card_h, label, big, sub, meta["color"])
+
+    if lecture:
+        sep_y = S.CONTENT_Y + avail_h + 14
+        SH.add_rect(slide, S.MARGIN_X, sep_y, S.CONTENT_W, 1.5, fill=S.CARD_BORDER, line_color=None)
+        SH.add_text(slide, S.MARGIN_X, sep_y + 14, S.CONTENT_W, legend_h - 14,
+                    lecture, size=S.SIZE_BODY, color=S.TEXT_SECONDARY)
+
+    SH.add_footer(slide, project_name, page_num, total_pages)
+
+
+def _trim_leading_defect_months(cats, created, resolved, stock):
+    """Coupe les mois de tête sans aucune activité (rien créé, rien résolu,
+    stock nul) — évite un graphique qui démarre par une longue plage plate à
+    0 avant le premier ticket réel de la catégorie (anomalie et incident
+    peuvent démarrer à des mois différents)."""
+    for i in range(len(cats)):
+        if created[i] or resolved[i] or stock[i]:
+            return cats[i:], created[i:], resolved[i:], stock[i:]
+    return cats, created, resolved, stock
+
+
+def render_defauts_tendance(slide, placeholder_shape, data, template_path, page_num, total_pages):
+    m = data["metrics"]
+    project_name = data["project_name"].strip()
+    SH.clear_legacy_chrome(slide)
+    SH.clear_placeholder(placeholder_shape)
+
+    dt_ = m.get("defauts_tendance")
+    if not dt_:
+        SH.add_header(slide, "AUCUNE DONNÉE", "Anomalies & incidents · Tendance", template_path)
+        SH.add_text(slide, S.MARGIN_X, S.CONTENT_Y + 40, S.CONTENT_W, 100,
+                    "Aucun ticket anomalie/incident dans le périmètre (anomaly_types/"
+                    "incident_types vides ou non renseignés dans project.yaml).",
+                    size=S.SIZE_BODY, color=S.TEXT_SECONDARY)
+        SH.add_footer(slide, project_name, page_num, total_pages)
+        return
+
+    cats = dt_["categories"]
+    SH.add_header(slide, f"{len(cats)} MOIS", "Anomalies & incidents · Tendance", template_path)
+
+    lecture = (data.get("coaching") or {}).get("defauts_tendance_lecture", "")
+    legend_band_h = 70 if lecture else 0
+
+    LABEL_H, SUB_H, GAP_COLS, TOP_H = 30, 24, 40, 380
+    half_w = (S.CONTENT_W - GAP_COLS) / 2
+    chart_y = S.CONTENT_Y + LABEL_H + SUB_H + 6
+
+    for i, cat in enumerate(("anomalie", "incident")):
+        meta = DEFECT_META[cat]
+        d = dt_[cat]
+        x = S.MARGIN_X + i * (half_w + GAP_COLS)
+        SH.add_text(slide, x, S.CONTENT_Y, half_w, LABEL_H,
+                    f"{meta['label']} — créées vs résolues", size=Pt(13),
+                    color=meta["color"], bold=True, all_caps=True)
+        delta = d["stock_end"] - d["stock_start"]
+        SH.add_text(slide, x, S.CONTENT_Y + LABEL_H, half_w, SUB_H,
+                    f"Stock ouvert : {d['stock_start']} → {d['stock_end']} sur la période "
+                    f"({'+' if delta >= 0 else ''}{delta})",
+                    size=Pt(11), color=S.TEXT_SECONDARY)
+
+        cats_i, created_i, resolved_i, stock_i = _trim_leading_defect_months(
+            cats, d["created"], d["resolved"], d["stock"])
+
+        cd = CategoryChartData()
+        cd.categories = cats_i
+        cd.add_series(_defect_word("Créé", meta, 2), created_i)
+        cd.add_series(_defect_word("Résolu", meta, 2), resolved_i)
+        gf = slide.shapes.add_chart(XL_CHART_TYPE.COLUMN_CLUSTERED, S.px(x), S.px(chart_y),
+                                     S.px(half_w), S.px(TOP_H), cd)
+        chart = gf.chart
+        chart.has_title = False
+        # Assez de marge basse pour que la légende (hors mise en page, ancrée
+        # au bas du cadre) ne chevauche jamais les libellés d'axe — un piège
+        # rencontré en QA sur ces mini-graphiques (moitié moins hauts qu'un
+        # graphique pleine largeur, donc la même fraction basse laisse
+        # nettement moins de pixels réels aux deux).
+        _set_manual_plot_area(chart, 0.03, 0.03, 0.94, 0.62)
+
+        series = chart.plots[0].series
+        series[0].format.fill.solid()
+        series[0].format.fill.fore_color.rgb = meta["color"]
+        series[0].format.line.fill.background()
+        series[1].format.fill.solid()
+        series[1].format.fill.fore_color.rgb = S.TREND_OPTIMIST
+        series[1].format.line.fill.background()
+
+        cat_ax = chart.category_axis
+        cat_ax.format.line.color.rgb = S.CARD_BORDER
+        cat_ax.tick_labels.font.size = Pt(9)
+        cat_ax.tick_labels.font.color.rgb = S.TEXT_FOOTER
+
+        val_ax = chart.value_axis
+        val_ax.has_major_gridlines = True
+        val_ax.major_gridlines.format.line.color.rgb = S.CARD_BORDER_INNER
+        val_ax.tick_labels.font.size = Pt(9)
+        val_ax.tick_labels.font.color.rgb = S.TEXT_FOOTER
+        val_ax.format.line.fill.background()
+
+        _add_secondary_axis(chart, cats_i, [("Stock ouvert", stock_i, "1F4E79", 2.5, None)])
+
+        chart.has_legend = True
+        chart.legend.position = XL_LEGEND_POSITION.BOTTOM
+        chart.legend.include_in_layout = False
+        chart.legend.font.size = Pt(9.5)
+        chart.legend.font.color.rgb = S.TEXT_PRIMARY
+
+    # ------------------------------------------------------ ancienneté backlog
+    bottom_y = chart_y + TOP_H + 30
+    bottom_h = S.CONTENT_Y + S.CONTENT_H - legend_band_h - bottom_y
+    ab = dt_["age_buckets"]
+    labels = ab["labels"]
+    palette = _age_severity_palette(len(labels))
+
+    SH.add_text(slide, S.MARGIN_X, bottom_y, S.CONTENT_W, 26,
+                "ANCIENNETÉ DU BACKLOG OUVERT", size=S.SIZE_CARD_LABEL,
+                color=S.TEXT_SECONDARY, bold=True, all_caps=True)
+    swatch_y = bottom_y + 30
+    lx = S.MARGIN_X
+    for label, color in zip(labels, palette):
+        SH.add_rect(slide, lx, swatch_y + 4, 14, 14, fill=color, line_color=None)
+        w = _text_w_px(label) + 14
+        SH.add_text(slide, lx + 20, swatch_y, w, 22, label, size=Pt(10.5), color=S.TEXT_SECONDARY)
+        lx += 20 + w + 20
+
+    rows_y = swatch_y + 34
+    row_h = max((bottom_h - 34 - 12) / 2, 50)
+    label_w = 220
+    bar_x = S.MARGIN_X + label_w
+    bar_w = S.CONTENT_W - label_w
+    for i, cat in enumerate(("anomalie", "incident")):
+        meta = DEFECT_META[cat]
+        counts = ab[cat]
+        total = sum(counts) or 1
+        ry = rows_y + i * (row_h + 12)
+        SH.add_text(slide, S.MARGIN_X, ry, label_w - 12, row_h * 0.55, meta["label"],
+                    size=Pt(13), color=S.BRAND_PRIMARY, bold=True, anchor=MSO_ANCHOR.BOTTOM)
+        SH.add_text(slide, S.MARGIN_X, ry + row_h * 0.55, label_w - 12, row_h * 0.45,
+                    f"{sum(counts)} {_defect_word('ouvert', meta, sum(counts))}",
+                    size=Pt(11), color=S.TEXT_SECONDARY, anchor=MSO_ANCHOR.TOP)
+        bar_h = min(52, row_h)
+        by = ry + (row_h - bar_h) / 2
+        x = bar_x
+        for count, color, label in zip(counts, palette, labels):
+            seg_w = bar_w * count / total
+            if seg_w <= 0:
+                continue
+            SH.add_rect(slide, x, by, max(seg_w, 1), bar_h, fill=color, line_color=None)
+            if count and seg_w - 20 >= _text_w_px(str(count)):
+                SH.add_text(slide, x, by, seg_w, bar_h, str(count), size=Pt(13),
+                            color=_contrast_text_color(color), bold=True,
+                            align=PP_ALIGN.CENTER, anchor=MSO_ANCHOR.MIDDLE)
+            x += seg_w
+
+    if lecture:
+        sep_y = S.CONTENT_Y + S.CONTENT_H - legend_band_h + 6
+        SH.add_rect(slide, S.MARGIN_X, sep_y, S.CONTENT_W, 1.5, fill=S.CARD_BORDER, line_color=None)
+        SH.add_text(slide, S.MARGIN_X, sep_y + 14, S.CONTENT_W, legend_band_h - 14,
+                    lecture, size=S.SIZE_BODY, color=S.TEXT_SECONDARY)
+
+    SH.add_footer(slide, project_name, page_num, total_pages)
+
+
+def render_defauts_delai_origine(slide, placeholder_shape, data, template_path, page_num, total_pages):
+    m = data["metrics"]
+    project_name = data["project_name"].strip()
+    SH.clear_legacy_chrome(slide)
+    SH.clear_placeholder(placeholder_shape)
+
+    do_ = m.get("defauts_delai_origine")
+    if not do_:
+        SH.add_header(slide, "AUCUNE DONNÉE", "Anomalies & incidents · Délai & origine", template_path)
+        SH.add_text(slide, S.MARGIN_X, S.CONTENT_Y + 40, S.CONTENT_W, 100,
+                    "Aucun ticket anomalie/incident/travaux dans le périmètre (anomaly_types/"
+                    "incident_types/work_types vides ou non renseignés dans project.yaml).",
+                    size=S.SIZE_BODY, color=S.TEXT_SECONDARY)
+        SH.add_footer(slide, project_name, page_num, total_pages)
+        return
+
+    SH.add_header(slide, "TEMPS DE TRAITEMENT ET ZONES DU PRODUIT CONCERNÉES",
+                  "Anomalies & incidents · Délai & origine", template_path)
+
+    lecture = (data.get("coaching") or {}).get("defauts_delai_origine_lecture", "")
+    legend_h = 60 if lecture else 0
+    avail_h = S.CONTENT_H - legend_h
+    pad = S.CARD_PADDING_PX
+    left_w = (S.CONTENT_W - 40) / 2
+    right_x = S.MARGIN_X + left_w + 40
+    right_w = left_w
+
+    # ----------------------------------------------------------- délai (gauche)
+    SH.add_rounded_rect(slide, S.MARGIN_X, S.CONTENT_Y, left_w, avail_h)
+    SH.add_text(slide, S.MARGIN_X + pad, S.CONTENT_Y + pad - 6, left_w - 2 * pad, 26,
+                "DÉLAI DE TRAITEMENT COMPARÉ", size=S.SIZE_CARD_LABEL,
+                color=S.TEXT_SECONDARY, bold=True, all_caps=True)
+    SH.add_text(slide, S.MARGIN_X + pad, S.CONTENT_Y + pad + 22, left_w - 2 * pad, 34,
+                "Jours calendaires entre création et résolution — barre = P15 à P85, "
+                "trait = médiane, losange = moyenne", size=Pt(10.5), color=S.TEXT_SECONDARY)
+
+    rows = [
+        ("Incidents", do_["delay"]["incident"], S.TYPE_INCIDENT),
+        ("Anomalies", do_["delay"]["anomalie"], S.TYPE_ANOMALY),
+    ]
+    if do_["delay"]["travaux"]["count"]:
+        rows.append(("Travaux", do_["delay"]["travaux"], S.TYPE_WORK))
+    LABEL_W = 150
+    axis_max_raw = max((r["p85"] for _, r, _ in rows if r["count"]), default=1) or 1
+    step = _nice_step(axis_max_raw / 6)
+    axis_max = max(step, math.ceil(axis_max_raw / step) * step)
+
+    plot_x0 = S.MARGIN_X + pad + LABEL_W
+    plot_w = left_w - pad - LABEL_W - pad
+
+    def xpos(v):
+        return plot_x0 + plot_w * min(v / axis_max, 1) if axis_max else plot_x0
+
+    HEADER_H = pad + 22 + 34 + 10
+    AXIS_BLOCK_H = 40
+    TABLE_H = 26 + len(rows) * 26 + 14
+    row_area_y = S.CONTENT_Y + HEADER_H
+    row_area_h = max(avail_h - HEADER_H - AXIS_BLOCK_H - TABLE_H - pad, 90)
+    # Hauteur de ligne plafonnée — avec seulement 2-3 lignes, la hauteur
+    # disponible (row_area_h) est bien plus généreuse que ce dont un
+    # box-plot a besoin ; l'étirer sur tout l'espace repousse l'axe et
+    # désolidarise visuellement le libellé (jours) de sa barre (retour QA).
+    # Le surplus, s'il y en a, reste en blanc sous les lignes plutôt que de
+    # les gonfler.
+    ROW_H_MAX = 130
+    row_h = min(row_area_h / len(rows), ROW_H_MAX)
+
+    for i, (name, r, color) in enumerate(rows):
+        ry = row_area_y + i * row_h
+        track_y = ry + row_h / 2
+        SH.add_text(slide, S.MARGIN_X + pad, ry, LABEL_W - 12, row_h, name, size=Pt(12),
+                    color=S.BRAND_PRIMARY, bold=True, anchor=MSO_ANCHOR.MIDDLE)
+        if not r["count"]:
+            SH.add_text(slide, plot_x0, ry, plot_w, row_h, "n/a", size=Pt(10.5),
+                        color=S.TEXT_FOOTER, anchor=MSO_ANCHOR.MIDDLE)
+            continue
+        SH.add_rounded_rect(slide, plot_x0, track_y - 6, plot_w, 12, fill=S.CARD_BG,
+                             line_color=None, radius_px=6)
+        box_x0, box_x1 = xpos(r["p15"]), xpos(r["p85"])
+        box = SH.add_rounded_rect(slide, box_x0, track_y - 16, max(box_x1 - box_x0, 4), 32,
+                                   fill=color, line_color=None, radius_px=8)
+        SH.set_transparency(box, 78)
+        med_x = xpos(r["median"])
+        SH.add_rect(slide, med_x - 2, track_y - 20, 4, 40, fill=color, line_color=None)
+        mean_x = xpos(r["mean"])
+        dia = slide.shapes.add_shape(MSO_SHAPE.DIAMOND, S.px(mean_x - 9), S.px(track_y - 9),
+                                      S.px(18), S.px(18))
+        dia.fill.solid()
+        dia.fill.fore_color.rgb = S.BRAND_ACCENT
+        dia.line.fill.background()
+        dia.shadow.inherit = False
+        # Ancré à track_y (le centre de la barre de CETTE ligne), pas au
+        # sommet de la ligne — reste collé à sa barre quelle que soit la
+        # hauteur de ligne (piège rencontré : avec row_h grand, un ancrage
+        # en haut de ligne isolait visuellement le libellé de sa barre).
+        SH.add_text(slide, plot_x0, track_y - 34, plot_w, 22, f"{_fr_num(r['median'])} j",
+                    size=Pt(11), color=S.TEXT_PRIMARY, bold=True,
+                    align=PP_ALIGN.RIGHT, anchor=MSO_ANCHOR.BOTTOM)
+
+    axis_y = row_area_y + row_h * len(rows) + 10
+    SH.add_rect(slide, plot_x0, axis_y, plot_w, 1.5, fill=S.CARD_BORDER, line_color=None)
+    n_ticks = round(axis_max / step) if step else 0
+    for i in range(n_ticks + 1):
+        v = i * step
+        tx = xpos(v)
+        SH.add_text(slide, tx - 30, axis_y + 10, 60, 24, f"{v:g} j", size=Pt(9),
+                    color=S.TEXT_FOOTER, align=PP_ALIGN.CENTER)
+
+    table_y = axis_y + 40
+    headers = ["Type", "P15", "Médiane", "Moyenne", "P85", "Volume"]
+    col_x = [S.MARGIN_X + pad, S.MARGIN_X + pad + 170, S.MARGIN_X + pad + 270,
+             S.MARGIN_X + pad + 370, S.MARGIN_X + pad + 470, S.MARGIN_X + pad + 570]
+    col_w = [150, 90, 90, 90, 90, 90]  # pitch entre colonnes -1, jamais le
+                                       # texte d'une colonne ne doit pouvoir
+                                       # atteindre le début de la suivante
+    SH.add_text(slide, col_x[0], table_y, col_w[0], 22, headers[0],
+                size=Pt(10), color=S.TEXT_FOOTER, bold=True)
+    for h, cx, w in zip(headers[1:], col_x[1:], col_w[1:]):
+        SH.add_text(slide, cx, table_y, w, 22, h, size=Pt(10), color=S.TEXT_FOOTER,
+                    bold=True, align=PP_ALIGN.RIGHT)
+    for i, (name, r, color) in enumerate(rows):
+        ty = table_y + 30 + i * 26
+        SH.add_rect(slide, col_x[0], ty + 6, 10, 10, fill=color, line_color=None)
+        SH.add_text(slide, col_x[0] + 16, ty, col_w[0] - 16, 22, name,
+                    size=Pt(10.5), color=S.TEXT_PRIMARY)
+        vals = [f"{_fr_num(r['p15'])} j", f"{_fr_num(r['median'])} j",
+                f"{_fr_num(r['mean'])} j", f"{_fr_num(r['p85'])} j", str(r["count"])]
+        for v, cx, w in zip(vals, col_x[1:], col_w[1:]):
+            SH.add_text(slide, cx, ty, w, 22, v, size=Pt(10.5), color=S.TEXT_PRIMARY,
+                        align=PP_ALIGN.RIGHT)
+
+    # ----------------------------------------------------------- origine (droite)
+    SH.add_rounded_rect(slide, right_x, S.CONTENT_Y, right_w, avail_h)
+    SH.add_text(slide, right_x + pad, S.CONTENT_Y + pad - 6, right_w - 2 * pad, 26,
+                "ORIGINE (PARENT)", size=S.SIZE_CARD_LABEL,
+                color=S.TEXT_SECONDARY, bold=True, all_caps=True)
+    SH.add_text(slide, right_x + pad, S.CONTENT_Y + pad + 22, right_w - 2 * pad, 22,
+                "Tickets créés sur la période, par ticket parent", size=Pt(10.5),
+                color=S.TEXT_SECONDARY)
+
+    origin_cats = [
+        ("anomalie", S.TYPE_ANOMALY),
+        ("incident", S.TYPE_INCIDENT),
+        ("travaux", S.TYPE_WORK),
+    ]
+
+    def _row_total(counts):
+        return sum(counts[cat] for cat, _ in origin_cats)
+
+    origin = do_["origin"]
+    rows_o = list(origin["parents"])
+    if _row_total(origin["other"]):
+        rows_o.append({"name": "Autres", **origin["other"]})
+    if _row_total(origin["no_parent"]):
+        rows_o.append({"name": "Sans parent", **origin["no_parent"]})
+
+    orig_y = S.CONTENT_Y + pad + 60
+    orig_h = avail_h - pad - 60 - pad
+    if rows_o:
+        max_total = max(_row_total(r) for r in rows_o) or 1
+        row_h_o = orig_h / len(rows_o)
+        label_w = 260
+        bar_x0 = right_x + pad + label_w
+        bar_w0 = right_w - 2 * pad - label_w - 100
+        for i, r in enumerate(rows_o):
+            ry = orig_y + i * row_h_o
+            total = _row_total(r)
+            name = r["name"]
+            if len(name) > 42:
+                name = name[:41].rstrip() + "…"
+            SH.add_text(slide, right_x + pad, ry, label_w - 10, row_h_o, name,
+                        size=Pt(11.5), color=S.BRAND_PRIMARY, bold=True, anchor=MSO_ANCHOR.MIDDLE)
+            bar_h = min(28, row_h_o * 0.55)
+            by = ry + (row_h_o - bar_h) / 2
+            x = bar_x0
+            for cat, color in origin_cats:
+                seg_w = bar_w0 * r[cat] / max_total
+                if seg_w > 0:
+                    SH.add_rect(slide, x, by, max(seg_w, 1), bar_h, fill=color, line_color=None)
+                x += seg_w
+            detail = "/".join(str(r[cat]) for cat, _ in origin_cats)
+            SH.add_text(slide, bar_x0 + bar_w0 + 10, ry, 100, row_h_o,
+                        f"{total} ({detail})", size=Pt(10.5),
+                        color=S.TEXT_SECONDARY, anchor=MSO_ANCHOR.MIDDLE)
+    else:
+        SH.add_text(slide, right_x + pad, orig_y, right_w - 2 * pad, 60,
+                    "Aucun ticket créé sur la période.", size=S.SIZE_BODY, color=S.TEXT_SECONDARY)
+
+    if lecture:
+        sep_y = S.CONTENT_Y + avail_h + 14
+        SH.add_rect(slide, S.MARGIN_X, sep_y, S.CONTENT_W, 1.5, fill=S.CARD_BORDER, line_color=None)
+        SH.add_text(slide, S.MARGIN_X, sep_y + 14, S.CONTENT_W, legend_h - 14,
                     lecture, size=S.SIZE_BODY, color=S.TEXT_SECONDARY)
 
     SH.add_footer(slide, project_name, page_num, total_pages)
@@ -2045,7 +2973,15 @@ def render_cycle_time(slide, placeholder_shape, data, template_path, page_num, t
     SH.clear_placeholder(placeholder_shape)
 
     ct = m["cycle_time"]
-    SH.add_header(slide, f"{ct['count']} US MESURÉES", "Cycle time", template_path)
+    # Libellé "Lead time" (pas "Cycle time") : la mesure sous-jacente
+    # (metrics["cycle_time"], created -> resolutiondate) est un lead time
+    # (création -> terminé), pas un cycle time (début du travail -> terminé).
+    # Champ/placeholder JSON (`cycle_time`, `{{chart:cycle_time}}`,
+    # `{{kpi:cycle_*}}`) volontairement inchangés ici — un vrai cycle time
+    # (à partir du 1er passage en statut "En cours", via changelog) est prévu
+    # comme indicateur séparé plus tard ; seul l'intitulé affiché est corrigé
+    # pour ne pas tromper la lecture d'ici là.
+    SH.add_header(slide, f"{ct['count']} US MESURÉES", "Lead time", template_path)
 
     if not ct["count"]:
         SH.add_text(slide, S.MARGIN_X, S.CONTENT_Y + 40, S.CONTENT_W, 60,
@@ -2202,7 +3138,9 @@ def render_kpi(slide, placeholder_shape, data, template_path, page_num, total_pa
         ("AVANCEMENT", f"{avancement} %", f"{done} US terminées", "fill"),
         ("RESTE À FAIRE", str(remaining), f"US sur {scope} au périmètre", "stat"),
         ("VÉLOCITÉ MÉDIANE", f"{m['median_velocity_us']:g}", "US par sprint, cadence à confirmer", "stat"),
-        ("CYCLE TIME MÉDIAN", f"{_fr_num(ct['median'])} j", f"moyenne {_fr_num(ct['mean'])} j · P85 {_fr_num(ct['p85'])} j", "stat"),
+        # "Lead time" — voir la note dans render_cycle_time (même donnée
+        # `cycle_time`, created -> resolutiondate).
+        ("LEAD TIME MÉDIAN", f"{_fr_num(ct['median'])} j", f"moyenne {_fr_num(ct['mean'])} j · P85 {_fr_num(ct['p85'])} j", "stat"),
         ("POINTS DE VIGILANCE", str(vigilance_n), vigilance_sub, "alert" if vigilance_n else "stat"),
     ]
 
@@ -2236,6 +3174,14 @@ def _card_kpi(slide, x, y, w, h, label, big, sub, fill=S.CARD_BG, border=S.CARD_
 def _card_kpi_fill(slide, x, y, w, h, label, big, sub):
     _card_kpi(slide, x, y, w, h, label, big, sub, fill=S.BRAND_PRIMARY, border=None,
               label_color=S.TEXT_WHITE, big_color=S.TEXT_WHITE, sub_color=S.TEXT_WHITE)
+
+
+def _card_kpi_accent(slide, x, y, w, h, label, big, sub, accent_color):
+    """Variante de _card_kpi avec un liseré coloré sur le bord gauche —
+    distingue les cartes Anomalies (orange) des cartes Incidents (rouge) sur
+    {{chart:defauts_kpi}}, sans dupliquer la carte standard grise."""
+    _card_kpi(slide, x, y, w, h, label, big, sub)
+    SH.add_rect(slide, x, y + 8, 4, h - 16, fill=accent_color, line_color=None)
 
 
 # ==================================================================== cover

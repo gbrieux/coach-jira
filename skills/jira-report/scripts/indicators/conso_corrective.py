@@ -1,13 +1,14 @@
 """Charge corrective — {{chart:conso_corrective}}. Part de la consommation
-(jh) par mois sur tickets terminés, ventilée en 4 catégories : anomalie /
-incident / Us / US tech. 100% empilé : chaque mois affiche une part relative,
-pas un volume absolu — voir render_agile.render_conso_corrective.
+(jh) par mois sur tickets terminés, ventilée en 6 catégories : anomalie /
+incident / Us / US tech / Sous-tâche / Travaux. 100% empilé : chaque mois
+affiche une part relative, pas un volume absolu — voir
+render_agile.render_conso_corrective.
 
-Périmètre limité à ces 4 catégories, comme les indicateurs US-scopés qui
+Périmètre limité à ces 6 catégories, comme les indicateurs US-scopés qui
 ignorent déjà tout type hors `us_types` (burnup, burndown, vélocité, statuts,
-cycle time) : un ticket terminé dont le type n'apparaît dans aucune des 4
+cycle time) : un ticket terminé dont le type n'apparaît dans aucune des 6
 listes ci-dessous n'est compté ni au numérateur ni au dénominateur — pas de
-5e bucket "Autre" qui diluerait la lecture anomalie/incident vs Us/US tech.
+7e bucket "Autre" qui diluerait la lecture.
 
 Catégorisation par type de ticket JIRA exact (project.yaml, jamais deviné à
 partir du libellé) :
@@ -16,6 +17,9 @@ partir du libellé) :
   tech_types:     ["Technical Story"]     # "US tech" — priorité 3
   us_types:       ["User Story", "Story"] # "Us" — déjà utilisé par les autres
                                            # indicateurs US-scopés, priorité 4
+  subtask_types:  ["Sous-tâche"]          # "Sous-tâche" — priorité 5
+  work_types:     ["Travaux"]             # "Travaux" — priorité 6, champ
+                                           # partagé avec {{chart:defauts_delai_origine}}
 Un type présent dans plusieurs listes (mauvaise config) est classé dans la
 première catégorie qui le contient, dans l'ordre ci-dessus.
 
@@ -34,7 +38,7 @@ from indicators.common import parse_dt, to_float
 
 RENDERERS = {"conso_corrective": render_agile.render_conso_corrective}
 
-CATEGORIES = ["anomalie", "incident", "us", "us_tech"]
+CATEGORIES = ["anomalie", "incident", "us", "us_tech", "sous_tache", "travaux"]
 
 
 def _category(itype, conf):
@@ -46,6 +50,10 @@ def _category(itype, conf):
         return "us_tech"
     if itype in conf["us_types"]:
         return "us"
+    if itype in conf.get("subtask_types", []):
+        return "sous_tache"
+    if itype in conf.get("work_types", []):
+        return "travaux"
     return None
 
 

@@ -63,6 +63,14 @@ DEFAULTS = {
     "incident_types": [],                   # types comptés comme "incident" pour {{chart:conso_corrective}}
     "tech_types": [],                       # types comptés comme "US tech" pour {{chart:conso_corrective}}
                                              # (US techniques hors us_types, ex. Technical Story)
+    "subtask_types": [],                    # types comptés comme "Sous-tâche" pour {{chart:conso_corrective}}
+    "work_types": [],                       # types comptés comme "Travaux" pour {{chart:conso_corrective}}
+                                             # ET comme "travaux" (3e catégorie) pour
+                                             # {{chart:defauts_delai_origine}} — champ partagé entre les
+                                             # deux indicateurs, comme anomaly_types/incident_types
+    "defect_age_buckets": [1, 7, 15, 30],    # bornes (jours) des tranches d'ancienneté du backlog
+                                             # ouvert sur {{chart:defauts_tendance}} — [1,7,15,30] donne
+                                             # 5 tranches : 0-1j / 2-7j / 8-15j / 16-30j / +30j
     "board_id": None,                       # requis pour dates/état des sprints
     "sprint_start_date": None,              # YYYY-MM-DD ; filtre les sprints plus anciens
     "sprint_duration_days": 21,             # durée calendaire d'un sprint, pour la projection burnup
@@ -73,6 +81,12 @@ DEFAULTS = {
                                              # `groups` (regroupe des statuts de `workflow` en une
                                              # bande, lisibilité), `start_date`/`end_date` (bornes
                                              # affichées) — voir indicators/cumulative_flow_diagram.py
+    "dispersion_etapes": {},                # config optionnelle de {{chart:dispersion_etapes}} :
+                                             # `min_transition_seconds` (défaut 300 = 5 min) — durée
+                                             # plancher sous laquelle un intervalle clos est ignoré
+                                             # (bruit d'automatisation JIRA : transitions à la création
+                                             # en quelques secondes, pas un vrai temps passé) — voir
+                                             # indicators/dispersion_etapes.py
 }
 
 

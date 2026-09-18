@@ -36,7 +36,13 @@ ticket réelle. Il ne parle que de noms de champs du JSON et de règles.
   "conso_corrective_lecture": "…",
   "tempo_conso_lecture": "…",
   "tempo_types_lecture": "…",
-  "epics_lecture": "…"
+  "epics_lecture": "…",
+  "defauts_kpi_lecture": "…",
+  "defauts_tendance_lecture": "…",
+  "defauts_delai_origine_lecture": "…",
+  "dispersion_etapes_lecture": "…",
+  "temps_par_etape_lecture": "…",
+  "cumul_estimation_conso_lecture": "…"
 }
 ```
 
@@ -120,7 +126,9 @@ d'arithmétique entre deux lignes de ce tableau.**
 | Conso worklogs toutes natures | `tempo_conso.total_conso_jh` | `type_conso_jh` |
 | Conso par type de ticket | `type_conso_jh` | `epics.total_conso_jh` |
 | Conso rollup par epic | `epics.total_conso_jh` | `conso_corrective.total_jh` |
-| Conso des tickets terminés, par mois | `conso_corrective.total_jh` | tout le reste |
+| Conso des tickets terminés, par mois (6 catégories anomalie/incident/Us/US tech/Sous-tâche/Travaux) | `conso_corrective.total_jh` | `defauts_kpi.total_jh` |
+| Conso des tickets terminés, sur la fenêtre, tous types (dénominateur du taux de défaut) | `defauts_kpi.total_jh` | `conso_corrective.total_jh`, `type_conso_jh` |
+| Délai anomalie/incident/travaux (création -> résolution) | `defauts_delai_origine.delay` | `cycle_time` (lead time US, échelle différente, non comparé sur cette slide) |
 
 Si deux champs canoniques divergent sur ce qui devrait être le même fait, l'écart se
 tranche **ici**, en amont : retenir le champ canonique et ne mentionner la divergence
@@ -486,6 +494,12 @@ chaque variante.
 | `tempo_conso_lecture` | Conso worklogs vs éléments terminés | `tempo_conso` | une lecture de productivité (voir ci-dessous) |
 | `tempo_types_lecture` | Temps Tempo par type de ticket, par mois | `tempo_types` | une lecture de productivité (voir ci-dessous) |
 | `epics_lecture` | Avancement par epic | `epics` (après §1.2) | la vélocité, le sprint courant |
+| `defauts_kpi_lecture` | Indicateurs clés · Qualité (anomalies/incidents) | `defauts_kpi` | le cycle time US, la charge corrective globale (autre slide) |
+| `defauts_tendance_lecture` | Anomalies & incidents · Tendance | `defauts_tendance` | le délai de traitement (autre slide) |
+| `defauts_delai_origine_lecture` | Anomalies & incidents · Délai & origine | `defauts_delai_origine` (Incidents/Anomalies) | le cycle time US, le volume créé/résolu (autres slides) |
+| `dispersion_etapes_lecture` | Dispersion par étape | `dispersion_etapes` | le cycle time global (autre échelle : par statut individuel, pas création -> résolution) |
+| `temps_par_etape_lecture` | Où passe le temps, étape par étape | `temps_par_etape` | la dispersion par statut (autre slide, autre lecture — ici le cumul, pas l'écart p10-p90) |
+| `cumul_estimation_conso_lecture` | Estimation vs consommé cumulés | `cumul_estimation_conso` | le cycle time, le burnup (autres slides, autre notion de temps) |
 
 Cas particuliers :
 
@@ -502,6 +516,48 @@ Cas particuliers :
   qui porte sur un autre champ) : **jamais de lecture en productivité**.
 - `epics_lecture` : interdiction absolue de commenter la prévisibilité avant la
   jointure §1.2.
+- `defauts_kpi_lecture` : les compteurs créées/résolues (flux sur la fenêtre) et
+  backlog ouvert à date (stock, sans limite d'ancienneté) ne sont **pas
+  additifs** — un ticket du backlog peut être antérieur à la fenêtre affichée.
+  Ne jamais présenter `créées - résolues` comme devant égaler le backlog ouvert.
+- `defauts_tendance_lecture` : le mois en cours est partiel, comme pour
+  `conso_corrective_lecture`. Le stock ouvert en fin de mois est une
+  approximation (`created`/`resolutiondate` seuls, pas de reconstruction par
+  changelog) : ne jamais la présenter comme aussi précise que le CFD.
+- `defauts_delai_origine_lecture` : compare Incidents, Anomalies et Travaux
+  (3e ligne affichée seulement si `work_types` est configuré et a des
+  tickets résolus) — le lead time US n'y figure pas (échelle trop
+  différente pour être lisible côte à côte, voir SKILL.md). L'origine
+  (`origin.parents`) est comptée par ticket **parent**, pas par composant :
+  un ticket sans parent renseigné va dans `no_parent`, jamais confondu avec
+  `other` (au-delà du top N).
+- `temps_par_etape_lecture` : le cumul affiché est une somme de **médianes**, pas un lead
+  time moyen réel (rappel déjà porté par un texte fixe sur la slide, ne pas le répéter) —
+  la lecture doit dire *où* le temps s'accumule (quel groupe, quels statuts), pas
+  recalculer le total. Mêmes exclusions que `dispersion_etapes_lecture` (statuts
+  terminaux, transitions sous le seuil de bruit).
+- `dispersion_etapes_lecture` : seuls les intervalles **clos** sont mesurés (une US
+  encore dans un statut ne compte pas pour ce statut), et seulement ceux d'au moins
+  `dispersion_etapes.min_transition_seconds` (project.yaml, défaut 5 min) — les
+  transitions quasi instantanées (automatisation JIRA à la création, pas un vrai
+  temps de travail) sont déjà filtrées en amont, jamais à mentionner comme un biais
+  restant. Un statut sans échantillon n'apparaît simplement pas sur la slide, ce
+  n'est pas une absence de donnée à signaler. Les statuts terminaux (`done_statuses`)
+  sont exclus de la slide par construction (jamais de lecture à en attendre, même
+  s'il existe des tickets réouverts). Une boîte large (grand écart
+  p25-p75) signale de l'instabilité, pas une durée moyenne longue : ne jamais
+  résumer une boîte large par sa seule médiane. L'axe est calé sur le p75 maximum,
+  pas le p90 : une moustache coupée (flèche + valeur affichée à côté) signale un p90
+  très étiré sur ce statut — un signal en soi (traîne longue), à citer avec sa vraie
+  valeur, jamais comme si la dispersion s'arrêtait au bord du graphique.
+- `cumul_estimation_conso_lecture` : le consommé (`timespent`) est cumulé à la
+  date de **création** du ticket, pas à sa résolution — contrairement à
+  `burnup_release.conso_cumul_us_jh`/`conso_corrective.total_jh`. Ne jamais
+  comparer directement ce consommé à celui d'une autre slide sans le préciser
+  (voir §1.4). L'écart entre « estimé Epics » et « estimé (hors Epic) » est un
+  écart de **maille** (macro au lancement de l'Epic vs micro somme des
+  tickets), jamais une anomalie de saisie en soi — ne le lire comme un
+  problème que si le contexte le confirme.
 
 ---
 
@@ -528,6 +584,12 @@ ci-dessous ne sont pas indicatifs.
 | `cycle_time_lecture` | **220 caractères** | bandeau bas, 2 lignes |
 | `types_lecture` | **250 caractères** | bandeau large, 2 lignes |
 | `epics_lecture` | **250 caractères** | — |
+| `defauts_kpi_lecture` | **220 caractères** | bandeau bas, pleine largeur |
+| `defauts_tendance_lecture` | **220 caractères** | bandeau bas, pleine largeur |
+| `defauts_delai_origine_lecture` | **220 caractères** | bandeau bas, pleine largeur |
+| `dispersion_etapes_lecture` | **220 caractères** | bandeau bas, pleine largeur |
+| `temps_par_etape_lecture` | **220 caractères** | bandeau bas, pleine largeur, sous le texte fixe de méthodologie |
+| `cumul_estimation_conso_lecture` | **220 caractères** | bandeau bas, pleine largeur |
 
 Ces plafonds sont la **référence unique** utilisée par `scripts/check_coaching.py` —
 ne pas les recopier ailleurs (SKILL.md, autres docs) sans les faire diverger : y

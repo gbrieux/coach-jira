@@ -48,69 +48,26 @@ from datetime import timedelta, timezone
 from datetime import datetime as _datetime
 
 import render_agile
-from indicators.common import parse_dt
+from indicators.common import parse_dt, status_timeline, resolve_status_names, status_group_map
 
 RENDERERS = {"cumulative_flow_diagram": render_agile.render_cfd}
 
 
-def _status_timeline(issue):
-    """[(datetime, status_id, status_name_brut), ...] trié, un point par
-    changement de statut réel (transitions consécutives vers le même
-    id dédupliquées). `status_name_brut` est le libellé tel qu'enregistré au
-    moment de la transition — à résoudre vers le nom actuel via l'id, voir
-    module docstring. Le premier point vient du statut d'origine du plus
-    ancien changement (son `from`/`fromString`), ou du statut courant si le
-    ticket n'a jamais changé de statut."""
-    f = issue["fields"]
-    created = parse_dt(f.get("created"))
-    if created is None:
-        return []
-    histories = (issue.get("changelog") or {}).get("histories") or []
-    changes = []
-    for h in histories:
-        hdt = parse_dt(h.get("created"))
-        if hdt is None:
-            continue
-        for item in h.get("items", []):
-            if item.get("field") == "status":
-                changes.append((hdt, item.get("from"), item.get("fromString"),
-                                 item.get("to"), item.get("toString")))
-    changes.sort(key=lambda c: c[0])
-
-    current = f.get("status") or {}
-    if changes:
-        first_id, first_name = changes[0][1], (changes[0][2] or changes[0][4])
-    else:
-        first_id, first_name = current.get("id"), current.get("name")
-
-    timeline = [(created, first_id, first_name)]
-    for hdt, _from_id, _from_name, to_id, to_name in changes:
-        if (to_id, to_name) != (timeline[-1][1], timeline[-1][2]):
-            timeline.append((hdt, to_id, to_name))
-    return timeline
-
-
 def _stage_labels_and_map(conf):
     """(labels, name_to_stage) pour le CFD — `cfd.groups` (project.yaml) si
-    configuré, sinon une bande par statut de `workflow` dans son ordre.
-    `(None, None)` si `workflow` est vide (l'appelant doit alors renoncer au
-    CFD, voir module docstring)."""
+    configuré, sinon une bande par statut de `workflow` dans son ordre (voir
+    indicators.common.status_group_map). `(None, None)` si `workflow` est
+    vide (l'appelant doit alors renoncer au CFD, voir module docstring)."""
     workflow = conf.get("workflow") or []
-    if not workflow:
-        return None, None
     groups = (conf.get("cfd") or {}).get("groups")
-    if not groups:
-        return list(workflow), {name: i for i, name in enumerate(workflow)}
-
-    labels = list(groups.keys())
-    name_to_stage = {}
-    for stage_i, names in enumerate(groups.values()):
-        for name in names:
-            name_to_stage[name] = stage_i
-    missing = [s for s in workflow if s not in name_to_stage]
-    if missing:
-        print(f"AVERTISSEMENT cumulative_flow_diagram: statut(s) de `workflow` absent(s) "
-              f"de `cfd.groups`, ignoré(s) dans le CFD : {', '.join(missing)}")
+    labels, name_to_stage = status_group_map(workflow, groups)
+    if labels is None:
+        return None, None
+    if groups:
+        missing = [s for s in workflow if s not in name_to_stage]
+        if missing:
+            print(f"AVERTISSEMENT cumulative_flow_diagram: statut(s) de `workflow` absent(s) "
+                  f"de `cfd.groups`, ignoré(s) dans le CFD : {', '.join(missing)}")
     return labels, name_to_stage
 
 
@@ -138,11 +95,7 @@ def compute(issues, sprints, conf):
     # id de statut -> nom actuel, observé sur les tickets qui le portent
     # aujourd'hui (tous types, pas seulement les US : même schéma de
     # workflow). Voir module docstring.
-    id_to_current_name = {}
-    for it in issues:
-        st = it["fields"].get("status") or {}
-        if st.get("id"):
-            id_to_current_name[st["id"]] = st.get("name")
+    id_to_current_name = resolve_status_names(issues)
 
     stage_timelines = []  # une entrée par US : [(dt, stage_idx), ...]
     for it in issues:
@@ -150,7 +103,7 @@ def compute(issues, sprints, conf):
         if (f.get("issuetype") or {}).get("name") not in us_types:
             continue
         points = []
-        for dt, status_id, raw_name in _status_timeline(it):
+        for dt, status_id, raw_name in status_timeline(it):
             name = id_to_current_name.get(status_id, raw_name)
             stage = name_to_stage.get(name)
             if stage is None or (points and stage == points[-1][1]):
