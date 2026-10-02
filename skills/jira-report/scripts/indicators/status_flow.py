@@ -3,6 +3,7 @@ configuré (project.yaml, champ `workflow`) plutôt que par fréquence."""
 from collections import defaultdict
 
 import render_agile
+from indicators.common import ticket_types
 
 RENDERERS = {"status": render_agile.render_status}
 
@@ -24,17 +25,17 @@ def _ordered(counts, workflow):
 
 
 def compute(issues, sprints, conf):
-    us_types = set(conf["us_types"])
+    us_types = ticket_types(conf, "status", conf["us_types"])  # None = tous types
     workflow = conf.get("workflow") or []
     status_counts = defaultdict(int)      # tous types
-    status_counts_us = defaultdict(int)   # US uniquement (chart:status)
+    status_counts_us = defaultdict(int)   # ticket_filter.status (défaut US) — chart:status
 
     for it in issues:
         f = it["fields"]
         status = (f.get("status") or {}).get("name", "Inconnu")
         itype = (f.get("issuetype") or {}).get("name", "Inconnu")
         status_counts[status] += 1
-        if itype in us_types:
+        if us_types is None or itype in us_types:
             status_counts_us[status] += 1
 
     done_statuses = set(conf["done_statuses"])

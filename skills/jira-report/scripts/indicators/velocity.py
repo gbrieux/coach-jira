@@ -3,7 +3,7 @@ import statistics
 from collections import defaultdict
 
 import render_agile
-from indicators.common import BACKLOG_KEY, sprint_names, to_float
+from indicators.common import BACKLOG_KEY, filter_issues, sprint_names, to_float
 
 RENDERERS = {
     "velocity": render_agile.render_velocity,
@@ -13,7 +13,7 @@ RENDERERS = {
 
 
 def compute(issues, sprints, conf):
-    us_types = set(conf["us_types"])
+    issues = filter_issues(issues, conf, "velocity", conf["us_types"])
     done_statuses = set(conf["done_statuses"])
     sp_field = conf["story_points_field"]
     spr_field = conf["sprint_field"]
@@ -25,9 +25,6 @@ def compute(issues, sprints, conf):
 
     for it in issues:
         f = it["fields"]
-        itype = (f.get("issuetype") or {}).get("name", "Inconnu")
-        if itype not in us_types:
-            continue
         status = (f.get("status") or {}).get("name", "Inconnu")
         sp = to_float(f.get(sp_field))
         spr_list = sprint_names(f.get(spr_field))

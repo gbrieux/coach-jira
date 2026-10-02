@@ -13,7 +13,7 @@ rapides y figurent déjà — leur médiane est mécaniquement basse. `open`
 plutôt que de le laisser passer pour une amélioration. Sprints futurs
 (`state == "future"`) exclus."""
 import render_agile
-from indicators.common import parse_dt, percentile, resolve_status_names, sprint_cycle
+from indicators.common import filter_issues, parse_dt, percentile, resolve_status_names, sprint_cycle
 
 RENDERERS = {"sprint_cycle_trend": render_agile.render_sprint_cycle_trend}
 
@@ -21,7 +21,6 @@ RENDERERS = {"sprint_cycle_trend": render_agile.render_sprint_cycle_trend}
 def compute(issues, sprints, conf):
     if not sprints:
         return {"sprint_cycle_trend": None}
-    us_types = set(conf["us_types"])
     done_statuses = set(conf["done_statuses"])
     spr_field = conf["sprint_field"]
     sprint_starts = {s["name"]: parse_dt(s.get("startDate")) for s in sprints if s.get("name")}
@@ -29,10 +28,8 @@ def compute(issues, sprints, conf):
 
     days_by_sprint = {s["name"]: [] for s in sprints}
     open_by_sprint = {s["name"]: 0 for s in sprints}
-    for it in issues:
+    for it in filter_issues(issues, conf, "sprint_cycle_trend", conf["us_types"]):
         f = it["fields"]
-        if (f.get("issuetype") or {}).get("name") not in us_types:
-            continue
         status = (f.get("status") or {}).get("name")
         sprint_name, days = sprint_cycle(it, spr_field, done_statuses, sprint_starts, id_to_current_name)
         if sprint_name not in days_by_sprint:

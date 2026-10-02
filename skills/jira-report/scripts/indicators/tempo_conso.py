@@ -18,7 +18,7 @@ from collections import defaultdict
 
 import render_agile
 from indicators.burnup import _build_rollup
-from indicators.common import BACKLOG_KEY, parse_dt, sprint_date_bucket, sprint_label
+from indicators.common import BACKLOG_KEY, issue_type, parse_dt, ticket_types, sprint_date_bucket, sprint_label
 
 RENDERERS = {"tempo_conso": render_agile.render_tempo_conso}
 
@@ -27,6 +27,11 @@ def compute(issues, sprints, conf):
     worklogs = conf.get("tempo_worklogs")
     if worklogs is None:
         return {"tempo_conso": None}
+
+    types = ticket_types(conf, "tempo_conso")  # None = tous les worklogs
+    if types is not None:
+        keep = {str(it.get("id")) for it in issues if issue_type(it) in types}
+        worklogs = [w for w in worklogs if str(w.get("issue_id")) in keep]
 
     spd = conf["seconds_per_day"]
     conso_by_bucket = defaultdict(float)

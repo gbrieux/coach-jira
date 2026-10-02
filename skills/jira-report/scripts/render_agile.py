@@ -1895,9 +1895,9 @@ def render_cumul_estimation_conso(slide, placeholder_shape, data, template_path,
 
     cd = CategoryChartData()
     cd.categories = categories
-    cd.add_series("Estimé (hors Epic)", cec["estime_jh"])
-    cd.add_series("Consommé (hors Epic)", cec["consomme_jh"])
-    cd.add_series("Estimé Epics", cec["estime_epics_jh"])
+    cd.add_series("Estimation des tickets", cec["estime_jh"])
+    cd.add_series("Consommé des tickets", cec["consomme_jh"])
+    cd.add_series("Estimation EPIC initiale", cec["estime_epics_jh"])
 
     gf = slide.shapes.add_chart(XL_CHART_TYPE.LINE, S.px(S.MARGIN_X), S.px(S.CONTENT_Y),
                                  S.px(CHART_W), S.px(S.CONTENT_H), cd)
@@ -1942,25 +1942,25 @@ def render_cumul_estimation_conso(slide, placeholder_shape, data, template_path,
     # ------------------------------------------------------------ rail droit
     card_h = (S.CONTENT_H - 3 * 20) / 4
     y = S.CONTENT_Y
-    _card_stat(slide, RAIL_X, y, RAIL_W, card_h, "ESTIMÉ (HORS EPIC)",
-               f"{_fr_num(cec['total_estime_jh'])} jh", "")
+    _card_stat(slide, RAIL_X, y, RAIL_W, card_h, "ESTIMATION DES TICKETS",
+               f"{_fr_num(cec['total_estime_jh'])} jh", "", label_lines=2)
     y += card_h + 20
-    _card_stat(slide, RAIL_X, y, RAIL_W, card_h, "CONSOMMÉ (HORS EPIC)",
+    _card_stat(slide, RAIL_X, y, RAIL_W, card_h, "CONSOMMÉ DES TICKETS",
                f"{_fr_num(cec['total_consomme_jh'])} jh",
-               f"écart : {_fr_num(cec['ecart_conso_estime_jh'])} jh")
+               f"écart : {_fr_num(cec['ecart_conso_estime_jh'])} jh", label_lines=2)
     y += card_h + 20
-    _card_stat(slide, RAIL_X, y, RAIL_W, card_h, "ESTIMÉ EPICS",
-               f"{_fr_num(cec['total_estime_epics_jh'])} jh", "")
+    _card_stat(slide, RAIL_X, y, RAIL_W, card_h, "ESTIMATION EPIC INITIALE",
+               f"{_fr_num(cec['total_estime_epics_jh'])} jh", "", label_lines=2)
     y += card_h + 20
-    _card_stat(slide, RAIL_X, y, RAIL_W, card_h, "ÉCART EPICS / DÉTAIL",
+    _card_stat(slide, RAIL_X, y, RAIL_W, card_h, "ÉCART EPIC INITIALE / TICKETS",
                f"{_fr_num(cec['ecart_epics_detail_jh'])} jh",
-               "estimé Epics − estimé détaillé")
+               "EPIC initiale − tickets", label_lines=2)
 
     SH.add_footer(slide, project_name, page_num, total_pages)
 
 
 # ==================================================================== epics
-EPIC_TABLE_HEADERS = ["ID", "Libellé", "Statut", "Estim.", "Conso", "RAF théo",
+EPIC_TABLE_HEADERS = ["ID", "Libellé", "Statut", "Estim. EPIC initiale", "Conso", "RAF théo",
                       "US term.", "US restantes", "% avanc."]
 EPIC_TABLE_COL_FRACS = [0.09, 0.27, 0.11, 0.10, 0.10, 0.10, 0.08, 0.08, 0.07]
 # PowerPoint traite la hauteur de ligne de table comme un minimum, pas un
@@ -1991,12 +1991,14 @@ MAX_EPIC_ROWS_WITH_LEGEND = 5
 
 
 def _card_mini(slide, x, y, w, h, label, big, sub, fill=S.CARD_BG, border=S.CARD_BORDER,
-               label_color=S.TEXT_SECONDARY, big_color=S.BRAND_PRIMARY, sub_color=S.TEXT_SECONDARY):
+               label_color=S.TEXT_SECONDARY, big_color=S.BRAND_PRIMARY, sub_color=S.TEXT_SECONDARY,
+               label_lines=1):
     SH.add_rounded_rect(slide, x, y, w, h, fill=fill, line_color=border)
     pad = 20
-    SH.add_text(slide, x + pad, y + pad - 4, w - 2 * pad, 24, label, size=Pt(10.5),
+    label_h = 24 * label_lines
+    SH.add_text(slide, x + pad, y + pad - 4, w - 2 * pad, label_h, label, size=Pt(10.5),
                 color=label_color, bold=True, all_caps=True)
-    SH.add_text(slide, x + pad, y + pad + 26, w - 2 * pad, 56, big, size=Pt(26),
+    SH.add_text(slide, x + pad, y + pad + 2 + label_h, w - 2 * pad, 56, big, size=Pt(26),
                 color=big_color, bold=True)
     if sub:
         SH.add_text(slide, x + pad, y + h - pad - 22, w - 2 * pad, 22, sub, size=Pt(10.5),
@@ -2026,7 +2028,8 @@ def render_epics(slide, placeholder_shape, data, template_path, page_num, total_
     card_w = (S.CONTENT_W - 4 * gap) / 5
     card_h = 150
     cx = S.MARGIN_X
-    _card_mini(slide, cx, S.CONTENT_Y, card_w, card_h, "ESTIMATION", f"{_fr_num(ep['total_estimate_jh'])} jh", "")
+    _card_mini(slide, cx, S.CONTENT_Y, card_w, card_h, "ESTIMATION EPIC INITIALE", f"{_fr_num(ep['total_estimate_jh'])} jh", "",
+               label_lines=2)
     cx += card_w + gap
     conso_alert = ep["total_conso_jh"] > ep["total_estimate_jh"]
     _card_mini(slide, cx, S.CONTENT_Y, card_w, card_h, "CONSOMMÉ", f"{_fr_num(ep['total_conso_jh'])} jh", "",
@@ -2070,12 +2073,18 @@ def render_epics(slide, placeholder_shape, data, template_path, page_num, total_
     max_rows = MAX_EPIC_ROWS_WITH_LEGEND if epics_lecture else MAX_EPIC_ROWS
     max_rows = min(max_rows, max(int((table_h - header_h) // row_floor), 1))
 
+    # Ligne « Sans EPIC » (tickets non rattachés, voir fetch_jira.py:build_epics)
+    # toujours affichée en dernier : sans elle, la somme des lignes ne
+    # retombe pas sur la carte CONSOMMÉ.
+    no_epic = ep.get("no_epic")
+    if no_epic:
+        max_rows = max(max_rows - 1, 1)
     items = ep["items"]
     truncated = len(items) > max_rows
     shown = items[:max_rows - 1] if truncated else items
     rest = items[max_rows - 1:] if truncated else []
 
-    n_rows = len(shown) + 1 + (1 if rest else 0)
+    n_rows = len(shown) + 1 + (1 if rest else 0) + (1 if no_epic else 0)
     row_h = max((table_h - header_h) / (n_rows - 1), row_floor)
 
     tbl_shape = slide.shapes.add_table(n_rows, len(EPIC_TABLE_HEADERS),
@@ -2146,11 +2155,30 @@ def render_epics(slide, placeholder_shape, data, template_path, page_num, total_
         row_fill = RGBColor(0xF4, 0xF7, 0xFA)
         set_cell(r, 0, "—", color=S.TEXT_FOOTER, fill=row_fill)
         set_cell(r, 1, f"{len(rest)} autres EPICs ({preview})", color=S.TEXT_SECONDARY, fill=row_fill)
-        for c in (2, 3, 4, 5):
-            set_cell(r, c, "—", color=S.TEXT_FOOTER, fill=row_fill, align=PP_ALIGN.RIGHT if c >= 3 else PP_ALIGN.LEFT)
+        set_cell(r, 2, "—", color=S.TEXT_FOOTER, fill=row_fill)
+        rest_est = round(sum(e["estimate_jh"] for e in rest), 1)
+        rest_conso = round(sum(e["conso_jh"] for e in rest), 1)
+        set_cell(r, 3, _fr_num(rest_est), color=S.TEXT_SECONDARY, fill=row_fill, align=PP_ALIGN.RIGHT)
+        set_cell(r, 4, _fr_num(rest_conso), color=S.TEXT_SECONDARY, fill=row_fill, align=PP_ALIGN.RIGHT)
+        set_cell(r, 5, _fr_num(round(rest_est - rest_conso, 1)), color=S.TEXT_SECONDARY, fill=row_fill,
+                 align=PP_ALIGN.RIGHT)
         set_cell(r, 6, str(rest_done), color=S.TEXT_SECONDARY, fill=row_fill, align=PP_ALIGN.RIGHT)
         set_cell(r, 7, str(rest_remaining), color=S.TEXT_SECONDARY, fill=row_fill, align=PP_ALIGN.RIGHT)
         set_cell(r, 8, f"{_fr_num(rest_pct, 0)} %", color=S.TEXT_SECONDARY, fill=row_fill, align=PP_ALIGN.RIGHT)
+
+    if no_epic:
+        r = n_rows - 1
+        row_fill = RGBColor(0xF4, 0xF7, 0xFA)
+        set_cell(r, 0, "—", color=S.TEXT_FOOTER, fill=row_fill)
+        set_cell(r, 1, f"Sans EPIC ({no_epic['ticket_count']} tickets)", color=S.TEXT_SECONDARY, fill=row_fill)
+        set_cell(r, 2, "—", color=S.TEXT_FOOTER, fill=row_fill)
+        set_cell(r, 3, "—", color=S.TEXT_FOOTER, fill=row_fill, align=PP_ALIGN.RIGHT)
+        set_cell(r, 4, _fr_num(no_epic["conso_jh"]), color=S.TEXT_SECONDARY, fill=row_fill, align=PP_ALIGN.RIGHT)
+        set_cell(r, 5, "—", color=S.TEXT_FOOTER, fill=row_fill, align=PP_ALIGN.RIGHT)
+        set_cell(r, 6, str(no_epic["us_done"]), color=S.TEXT_SECONDARY, fill=row_fill, align=PP_ALIGN.RIGHT)
+        set_cell(r, 7, str(no_epic["us_remaining"]), color=S.TEXT_SECONDARY, fill=row_fill, align=PP_ALIGN.RIGHT)
+        set_cell(r, 8, f"{_fr_num(no_epic['avancement_pct'], 0)} %", color=S.TEXT_SECONDARY, fill=row_fill,
+                 align=PP_ALIGN.RIGHT)
 
     if epics_lecture:
         SH.add_text(slide, S.MARGIN_X, EPIC_LEGEND_Y, S.CONTENT_W, EPIC_LEGEND_H,
@@ -3594,13 +3622,22 @@ def render_coach_decisions(slide, placeholder_shape, data, template_path, page_n
     _dark_footer(slide, project_name, page_num, total_pages)
 
 
-def _card_stat(slide, x, y, w, h, label, big, sub):
+def _card_stat(slide, x, y, w, h, label, big, sub, label_lines=1):
+    """`label_lines=2` : libellé long qui wrappe sur 2 lignes dans une carte
+    étroite — libellé remonté, grand nombre descendu et réduit (24 pt au lieu
+    de 30) pour laisser la place au sous-texte sans chevauchement."""
     SH.add_rounded_rect(slide, x, y, w, h)
     pad = S.CARD_PADDING_PX
-    SH.add_text(slide, x + pad, y + pad - 4, w - 2 * pad, 26, label,
+    if label_lines > 1:
+        label_y, label_h = y + pad - 12, 26 * label_lines
+        big_y, big_h, big_size = label_y + label_h, 56, S.SIZE_CARD_NUMBER_COMPACT
+    else:
+        label_y, label_h = y + pad - 4, 26
+        big_y, big_h, big_size = y + pad + 26, 64, S.SIZE_CARD_NUMBER
+    SH.add_text(slide, x + pad, label_y, w - 2 * pad, label_h, label,
                 size=S.SIZE_CARD_LABEL, color=S.TEXT_SECONDARY, bold=True, all_caps=True)
-    SH.add_text(slide, x + pad, y + pad + 26, w - 2 * pad, 64, big,
-                size=S.SIZE_CARD_NUMBER, color=S.BRAND_PRIMARY, bold=True)
+    SH.add_text(slide, x + pad, big_y, w - 2 * pad, big_h, big,
+                size=big_size, color=S.BRAND_PRIMARY, bold=True)
     SH.add_text(slide, x + pad, y + h - pad - 26, w - 2 * pad, 26, sub,
                 size=S.SIZE_CARD_LABEL, color=S.TEXT_SECONDARY)
 

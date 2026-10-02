@@ -2,21 +2,20 @@
 import statistics
 
 import render_agile
-from indicators.common import parse_dt, percentile
+from indicators.common import filter_issues, parse_dt, percentile
 
 RENDERERS = {"cycle_time": render_agile.render_cycle_time}
 
 
 def compute(issues, sprints, conf):
-    us_types = set(conf["us_types"])
+    issues = filter_issues(issues, conf, "cycle_time", conf["us_types"])
     done_statuses = set(conf["done_statuses"])
 
     cycle_us = []
     for it in issues:
         f = it["fields"]
-        itype = (f.get("issuetype") or {}).get("name", "Inconnu")
         status = (f.get("status") or {}).get("name", "Inconnu")
-        if itype not in us_types or status not in done_statuses:
+        if status not in done_statuses:
             continue
         created = parse_dt(f.get("created"))
         resolved = parse_dt(f.get("resolutiondate"))

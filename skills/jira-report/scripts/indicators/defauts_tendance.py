@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 
 import render_agile
 from indicators.common import (
+    filter_issues,
     parse_dt, to_float, defect_category, month_key, month_range,
     age_bucket_labels, age_bucket_index,
 )
@@ -45,7 +46,7 @@ def compute(issues, sprints, conf):
 
     categorized = [
         (it, defect_category((it["fields"].get("issuetype") or {}).get("name", ""), conf))
-        for it in issues
+        for it in filter_issues(issues, conf, "defauts_tendance")
     ]
     categorized = [(it, cat) for it, cat in categorized if cat]
     if not categorized:

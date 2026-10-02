@@ -48,7 +48,7 @@ from datetime import timedelta, timezone
 from datetime import datetime as _datetime
 
 import render_agile
-from indicators.common import parse_dt, status_timeline, resolve_status_names, status_group_map
+from indicators.common import filter_issues, parse_dt, status_timeline, resolve_status_names, status_group_map
 
 RENDERERS = {"cumulative_flow_diagram": render_agile.render_cfd}
 
@@ -89,7 +89,6 @@ def compute(issues, sprints, conf):
     labels, name_to_stage = _stage_labels_and_map(conf)
     if labels is None:
         return {"cfd": None}
-    us_types = set(conf["us_types"])
     n_stages = len(labels)
 
     # id de statut -> nom actuel, observé sur les tickets qui le portent
@@ -98,10 +97,7 @@ def compute(issues, sprints, conf):
     id_to_current_name = resolve_status_names(issues)
 
     stage_timelines = []  # une entrée par US : [(dt, stage_idx), ...]
-    for it in issues:
-        f = it["fields"]
-        if (f.get("issuetype") or {}).get("name") not in us_types:
-            continue
+    for it in filter_issues(issues, conf, "cumulative_flow_diagram", conf["us_types"]):
         points = []
         for dt, status_id, raw_name in status_timeline(it):
             name = id_to_current_name.get(status_id, raw_name)

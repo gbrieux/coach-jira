@@ -22,7 +22,7 @@ import statistics
 from datetime import datetime, timezone
 
 import render_agile
-from indicators.common import parse_dt, defect_category, percentile, month_key, month_range
+from indicators.common import filter_issues, parse_dt, defect_category, percentile, month_key, month_range
 
 RENDERERS = {"defauts_delai_origine": render_agile.render_defauts_delai_origine}
 
@@ -60,7 +60,7 @@ def compute(issues, sprints, conf):
 
     categorized = [
         (it, defect_category((it["fields"].get("issuetype") or {}).get("name", ""), conf))
-        for it in issues
+        for it in filter_issues(issues, conf, "defauts_delai_origine")
     ]
     categorized = [(it, cat) for it, cat in categorized if cat]
     if not categorized:

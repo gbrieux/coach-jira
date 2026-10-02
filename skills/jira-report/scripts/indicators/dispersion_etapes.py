@@ -58,7 +58,7 @@ reste cohérente entre les deux slides. Voir indicators.common.status_group_map
 et render_agile._cfd_palette (couleur effective, calculée au rendu à partir
 du nombre de groupes)."""
 import render_agile
-from indicators.common import resolve_status_names, status_group_map, status_durations, percentile
+from indicators.common import filter_issues, resolve_status_names, status_group_map, status_durations, percentile
 
 RENDERERS = {"dispersion_etapes": render_agile.render_dispersion_etapes}
 
@@ -67,14 +67,14 @@ def compute(issues, sprints, conf):
     workflow = conf.get("workflow") or []
     if not workflow:
         return {"dispersion_etapes": None}
-    us_types = set(conf["us_types"])
     done_statuses = set(conf["done_statuses"])
     groups = (conf.get("cfd") or {}).get("groups")
     group_labels, name_to_group = status_group_map(workflow, groups)
     min_transition_s = (conf.get("dispersion_etapes") or {}).get("min_transition_seconds", 300)
 
     id_to_current_name = resolve_status_names(issues)
-    durations, contributors = status_durations(issues, us_types, workflow, min_transition_s,
+    durations, contributors = status_durations(
+        filter_issues(issues, conf, "dispersion_etapes", conf["us_types"]), workflow, min_transition_s,
                                                 id_to_current_name)
     measured_us = set()
     for name in workflow:

@@ -9,7 +9,7 @@ from datetime import datetime as _datetime
 
 import render_agile
 from indicators.common import (
-    BACKLOG_KEY, FORECAST_MAX_HORIZON, parse_dt, percentile, sprint_date_bucket,
+    BACKLOG_KEY, FORECAST_MAX_HORIZON, filter_issues, parse_dt, percentile, sprint_date_bucket,
     sprint_label, sprint_names, to_float,
 )
 
@@ -25,7 +25,7 @@ def _build_rollup(issues, sprints, conf):
     l'ordre chronologique des sprints (+ "Sprint 0" pour le backlog jamais
     affecté à un sprint). Alimente à la fois le burnup et le tableau des
     sprints (liste_sprints)."""
-    us_types = set(conf["us_types"])
+    issues = filter_issues(issues, conf, "burnup", conf["us_types"])
     done_statuses = set(conf["done_statuses"])
     spd = conf["seconds_per_day"]
     sp_field = conf["story_points_field"]
@@ -39,9 +39,6 @@ def _build_rollup(issues, sprints, conf):
 
     for it in issues:
         f = it["fields"]
-        itype = (f.get("issuetype") or {}).get("name", "Inconnu")
-        if itype not in us_types:
-            continue
         status = (f.get("status") or {}).get("name", "Inconnu")
         estimate_days = to_float(f.get("timeoriginalestimate")) / spd
         consumed_days = to_float(f.get("timespent")) / spd

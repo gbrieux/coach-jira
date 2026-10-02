@@ -29,7 +29,7 @@ from datetime import timezone
 from datetime import datetime as _datetime
 
 import render_agile
-from indicators.common import parse_dt
+from indicators.common import filter_issues, parse_dt, ticket_types
 
 RENDERERS = {"tempo_types": render_agile.render_tempo_types}
 
@@ -56,13 +56,18 @@ def compute(issues, sprints, conf):
     spd = conf["seconds_per_day"]
     type_by_issue = {
         str(it.get("id")): (it["fields"].get("issuetype") or {}).get("name", "Inconnu")
-        for it in issues
+        for it in filter_issues(issues, conf, "tempo_types")
     }
+    # ticket_filter.tempo_types défini : on écarte les worklogs des tickets
+    # hors filtre plutôt que de les ranger en "Inconnu".
+    filtered = ticket_types(conf, "tempo_types") is not None
 
     by_month = defaultdict(lambda: defaultdict(float))
     for w in worklogs:
         dt = parse_dt(f"{w['date']}T00:00:00Z") if w.get("date") else None
         if dt is None:
+            continue
+        if filtered and str(w.get("issue_id")) not in type_by_issue:
             continue
         itype = type_by_issue.get(str(w.get("issue_id")), "Inconnu")
         by_month[_month_key(dt)][itype] += (w.get("seconds") or 0) / spd

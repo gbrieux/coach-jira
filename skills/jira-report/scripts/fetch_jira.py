@@ -26,7 +26,7 @@ import requests
 from dotenv import load_dotenv
 
 import indicators
-from indicators.common import parse_dt, to_float
+from indicators.common import filter_issues, parse_dt, to_float
 from workspace import data_root, output_dir, list_project_keys, load_project_config, DataDirNotConfigured
 
 
@@ -87,6 +87,10 @@ DEFAULTS = {
                                              # (bruit d'automatisation JIRA : transitions à la création
                                              # en quelques secondes, pas un vrai temps passé) — voir
                                              # indicators/dispersion_etapes.py
+    "ticket_filter": {},                    # {<placeholder>: [types JIRA]} par indicateur, filtre
+                                             # en mémoire ; clé absente = filtre historique de
+                                             # l'indicateur (us_types ou tous), liste vide = tous
+                                             # les tickets — voir indicators/common.py:ticket_types
 }
 
 
@@ -218,55 +222,81 @@ def fetch_sprints(s, board_id, sprint_start_date=None):
 
 
 def build_epics(issues, conf):
-    """Avancement par EPIC : rattachement via le champ `parent`. Estim./Conso
-    (jh) agrègent TOUS les types de tickets rattachés à l'EPIC ; l'avancement
-    (US terminées / US totales) ne compte que les User Story rattachées.
+    """Avancement par EPIC — aligné sur {{chart:cumul_estimation_conso}} pour
+    que les deux slides affichent les mêmes totaux :
+
+      - **Estimation EPIC initiale** (jh) : `timeoriginalestimate` porté par
+        le ticket Epic **lui-même** (pas le rollup de ses enfants, conservé à
+        part dans `detail_estimate_jh`). Total = `total_estime_epics_jh` de
+        cumul_estimation_conso.
+      - **Consommé** (jh) : `timespent` des tickets non-Epic rattachés à l'EPIC
+        via `parent` — directement, ou via leur ticket parent (sous-tâche ->
+        US -> EPIC). Les tickets sans EPIC forment une ligne « Sans EPIC »
+        (`no_epic`) : total = `total_consomme_jh` de cumul_estimation_conso.
+      - **Avancement** (US terminées / US totales) : toutes les User Story du
+        périmètre, y compris celles sans EPIC.
+
+    Même population que cumul_estimation_conso (`ticket_filter` de la clé
+    `cumul_estimation_conso`), pour garantir l'égalité des totaux.
 
     Reste ici plutôt que dans indicators/ : alimente {{liste_epics}}, une
     table de rapport comme {{liste_sprints}}, pas un graphique par indicateur."""
     us_types = set(conf["us_types"])
     done_statuses = set(conf["done_statuses"])
     spd = conf["seconds_per_day"]
+    population = filter_issues(issues, conf, "cumul_estimation_conso")
 
     epics_meta = {}
-    for it in issues:
+    parent_of = {}
+    for it in population:
         f = it["fields"]
+        parent = f.get("parent")
+        parent_of[it["key"]] = parent.get("key") if parent else None
         if (f.get("issuetype") or {}).get("name") == "Epic":
             epics_meta[it["key"]] = {
                 "key": it["key"],
                 "name": f.get("summary", ""),
                 "status": (f.get("status") or {}).get("name", "Inconnu"),
+                "estimate_jh": to_float(f.get("timeoriginalestimate")) / spd,
             }
 
-    rollup = defaultdict(lambda: {"estimate_jh": 0.0, "conso_jh": 0.0, "us_done": 0, "us_total": 0})
-    for it in issues:
+    def epic_of(key):
+        seen = set()
+        cur = parent_of.get(key)
+        while cur and cur not in seen:
+            if cur in epics_meta:
+                return cur
+            seen.add(cur)
+            cur = parent_of.get(cur)
+        return None
+
+    def empty():
+        return {"detail_estimate_jh": 0.0, "conso_jh": 0.0, "us_done": 0, "us_total": 0, "n": 0}
+
+    rollup = defaultdict(empty)
+    no_epic = empty()
+    for it in population:
         f = it["fields"]
         itype = (f.get("issuetype") or {}).get("name", "")
         if itype == "Epic":
             continue
-        parent = f.get("parent")
-        epic_key = parent.get("key") if parent else None
-        if epic_key not in epics_meta:
-            continue
-        r = rollup[epic_key]
-        r["estimate_jh"] += to_float(f.get("timeoriginalestimate")) / spd
+        epic_key = epic_of(it["key"])
+        r = rollup[epic_key] if epic_key else no_epic
+        r["n"] += 1
+        r["detail_estimate_jh"] += to_float(f.get("timeoriginalestimate")) / spd
         r["conso_jh"] += to_float(f.get("timespent")) / spd
         if itype in us_types:
             r["us_total"] += 1
             if (f.get("status") or {}).get("name") in done_statuses:
                 r["us_done"] += 1
 
-    items = []
-    for key, meta in epics_meta.items():
-        r = rollup.get(key, {"estimate_jh": 0.0, "conso_jh": 0.0, "us_done": 0, "us_total": 0})
-        estimate_jh = round(r["estimate_jh"], 1)
+    def row(r, estimate_jh):
+        estimate_jh = round(estimate_jh, 1)
         conso_jh = round(r["conso_jh"], 1)
         us_done, us_total = r["us_done"], r["us_total"]
-        items.append({
-            "key": key,
-            "name": meta["name"],
-            "status": meta["status"],
+        return {
             "estimate_jh": estimate_jh,
+            "detail_estimate_jh": round(r["detail_estimate_jh"], 1),
             "conso_jh": conso_jh,
             "raf_theo_jh": round(estimate_jh - conso_jh, 1),
             "us_done": us_done,
@@ -274,13 +304,32 @@ def build_epics(issues, conf):
             "us_total": us_total,
             "avancement_pct": round(100 * us_done / us_total, 1) if us_total else 0.0,
             "started": conso_jh > 0,
+        }
+
+    items = []
+    for key, meta in epics_meta.items():
+        items.append({
+            "key": key,
+            "name": meta["name"],
+            "status": meta["status"],
+            **row(rollup.get(key, empty()), meta["estimate_jh"]),
         })
     items.sort(key=lambda e: -e["conso_jh"])
 
-    total_estimate = round(sum(e["estimate_jh"] for e in items), 1)
-    total_conso = round(sum(e["conso_jh"] for e in items), 1)
-    us_done_total = sum(e["us_done"] for e in items)
-    us_total_total = sum(e["us_total"] for e in items)
+    no_epic_row = None
+    if no_epic["n"]:
+        # Pas d'estimation EPIC initiale possible : 0 par construction.
+        no_epic_row = {"key": "—", "name": "Sans EPIC", "status": "—",
+                       "ticket_count": no_epic["n"], **row(no_epic, 0.0)}
+
+    all_rows = items + ([no_epic_row] if no_epic_row else [])
+    # Totaux sur les valeurs brutes (pas la somme des lignes arrondies), pour
+    # retomber exactement sur les totaux de cumul_estimation_conso.
+    raw_rows = list(rollup.values()) + [no_epic]
+    total_estimate = round(sum(meta["estimate_jh"] for meta in epics_meta.values()), 1)
+    total_conso = round(sum(r["conso_jh"] for r in raw_rows), 1)
+    us_done_total = sum(e["us_done"] for e in all_rows)
+    us_total_total = sum(e["us_total"] for e in all_rows)
     avancement_frac = us_done_total / us_total_total if us_total_total else 0.0
     projection_jh = round(total_conso / avancement_frac, 1) if avancement_frac else None
     previsibilite_pct = (
@@ -290,7 +339,9 @@ def build_epics(issues, conf):
 
     return {
         "items": items,
+        "no_epic": no_epic_row,
         "total_estimate_jh": total_estimate,
+        "total_detail_estimate_jh": round(sum(r["detail_estimate_jh"] for r in raw_rows), 1),
         "total_conso_jh": total_conso,
         "total_raf_theo_jh": round(total_estimate - total_conso, 1),
         "avancement_pct": round(avancement_frac * 100, 1),

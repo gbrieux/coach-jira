@@ -46,6 +46,31 @@ def sprint_names(raw):
     return [n for n in names if n]
 
 
+def issue_type(issue):
+    return (issue["fields"].get("issuetype") or {}).get("name", "Inconnu")
+
+
+# ---------------------------------------------------- filtre par type de ticket
+def ticket_types(conf, key, default=None):
+    """Types de tickets JIRA retenus par l'indicateur `key` (nom du
+    placeholder `{{chart:<key>}}`) : `conf["ticket_filter"][key]` s'il est
+    défini (project.yaml), sinon `default` (le filtre historique de
+    l'indicateur — `us_types` pour les indicateurs US, aucun pour les
+    autres). Renvoie un set, ou None = tous les tickets (liste vide ou
+    absente)."""
+    types = (conf.get("ticket_filter") or {}).get(key, default)
+    return set(types) if types else None
+
+
+def filter_issues(issues, conf, key, default=None):
+    """Sous-ensemble de `issues` retenu par `ticket_types(conf, key, default)`
+    — filtre en mémoire, après l'unique requête JQL du projet."""
+    types = ticket_types(conf, key, default)
+    if types is None:
+        return list(issues)
+    return [it for it in issues if issue_type(it) in types]
+
+
 def sprint_label(num, end_iso):
     """'S<num> (dd/mm)' — numéro de sprint + date de fin (dernier jour du sprint)."""
     end = parse_dt(end_iso)
@@ -128,7 +153,7 @@ def status_group_map(workflow, groups):
     return labels, name_to_group
 
 
-def status_durations(issues, us_types, workflow, min_transition_seconds, id_to_current_name):
+def status_durations(issues, workflow, min_transition_seconds, id_to_current_name):
     """(durations, contributors) — partagé par dispersion_etapes.py et
     temps_par_etape.py, seuls consommateurs du temps passé par statut US.
 
@@ -144,13 +169,12 @@ def status_durations(issues, us_types, workflow, min_transition_seconds, id_to_c
     intervalle pour ce statut — un même ticket peut apparaître dans
     plusieurs statuts. À l'appelant d'agréger le sous-ensemble de statuts
     qui l'intéresse (`dispersion_etapes.us_count` prend tout `workflow`,
-    `temps_par_etape.us_count` seulement les statuts affichés)."""
+    `temps_par_etape.us_count` seulement les statuts affichés).
+
+    `issues` : déjà filtrés par type par l'appelant (`filter_issues`)."""
     durations = {name: [] for name in workflow}
     contributors = {name: set() for name in workflow}
     for it in issues:
-        f = it["fields"]
-        if (f.get("issuetype") or {}).get("name") not in us_types:
-            continue
         resolved = [
             (dt, id_to_current_name.get(status_id, raw_name))
             for dt, status_id, raw_name in status_timeline(it)

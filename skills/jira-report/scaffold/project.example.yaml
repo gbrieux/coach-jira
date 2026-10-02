@@ -57,3 +57,21 @@ jql: 'project = XXX AND ...'           # la requête JIRA qui définit le périm
 #                                       # transitionne un ticket en quelques secondes à sa création,
 #                                       # pas un vrai temps passé dans le statut). Défaut si absent : 300
 #                                       # (5 min).
+# ticket_filter:                       # optionnel : types de tickets JIRA (noms exacts) retenus par
+#                                       # chaque indicateur, filtrés en mémoire après la requête `jql`
+#                                       # (pas de requête JIRA supplémentaire). Clé = nom du placeholder
+#                                       # {{chart:<clé>}} (une clé couvre ses variantes _NB/_SP, et
+#                                       # `types` couvre aussi types_conso). Liste vide = tous les
+#                                       # tickets. Clé absente = filtre par défaut de l'indicateur :
+#                                       #   - us_types (ci-dessus) pour velocity, burndown, burnup,
+#                                       #     cycle_time, sprint_spread, sprint_cycle_trend, status,
+#                                       #     cumulative_flow_diagram, temps_par_etape, dispersion_etapes ;
+#                                       #   - tous les tickets pour types, conso_corrective,
+#                                       #     cumul_estimation_conso, tempo_conso, tempo_types,
+#                                       #     defauts_kpi, defauts_tendance, defauts_delai_origine.
+#                                       # Pour conso_corrective et defauts_*, le filtre ne fait que
+#                                       # restreindre les tickets en entrée : le classement reste sur
+#                                       # anomaly_types/incident_types/tech_types/... ci-dessus.
+#   velocity: ["User Story", "Story"]
+#   cumulative_flow_diagram: ["User Story", "Story", "Technical Story"]
+#   types: []

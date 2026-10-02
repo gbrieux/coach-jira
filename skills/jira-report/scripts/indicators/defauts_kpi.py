@@ -27,7 +27,7 @@ defauts_tendance.py et defauts_delai_origine.py) :
 from datetime import datetime, timezone
 
 import render_agile
-from indicators.common import parse_dt, to_float, defect_category, month_key, month_range
+from indicators.common import filter_issues, parse_dt, to_float, defect_category, month_key, month_range
 
 RENDERERS = {"defauts_kpi": render_agile.render_defauts_kpi}
 
@@ -41,7 +41,7 @@ def compute(issues, sprints, conf):
 
     categorized = [
         (it, defect_category((it["fields"].get("issuetype") or {}).get("name", ""), conf))
-        for it in issues
+        for it in filter_issues(issues, conf, "defauts_kpi")
     ]
     categorized = [(it, cat) for it, cat in categorized if cat]
     if not categorized:

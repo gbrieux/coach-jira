@@ -171,6 +171,19 @@ Tous les indicateurs US-scopés (burnup, burndown, vélocité, statuts, cycle ti
 ne comptent que les tickets de type `User Story`/`Story` (`us_types` en config) —
 pas les tâches techniques, sous-tâches, anomalies, etc.
 
+**Filtre par indicateur (`ticket_filter`, project.yaml)** — chaque indicateur
+peut surcharger la liste des types de tickets qu'il retient :
+`ticket_filter: {<placeholder>: [types JIRA exacts]}` (clé = nom du
+placeholder `{{chart:<clé>}}`, une clé couvre ses variantes `_NB`/`_SP`, et
+`types` couvre aussi `types_conso`). Filtre en mémoire, après l'unique requête
+`jql` — pas de requête JIRA supplémentaire. Liste vide = tous les tickets ;
+clé absente = filtre historique de l'indicateur (`us_types` pour les
+indicateurs US, tous les tickets pour les autres). Pour `conso_corrective` et
+`defauts_*`, le filtre ne fait que restreindre les tickets en entrée — le
+classement reste sur `anomaly_types`/`incident_types`/… Point d'entrée unique :
+`indicators.common.ticket_types`/`filter_issues`. `{{liste_sprints}}` suit
+`ticket_filter.burnup` (même rollup) ; `{{liste_epics}}` n'est pas concerné.
+
 **Code couleur par type de ticket** — uniforme sur tous les indicateurs qui
 distinguent les types (`{{chart:types}}`, `{{chart:types_conso}}`,
 `{{chart:conso_corrective}}`, `{{chart:tempo_types}}`) : voir
@@ -193,7 +206,7 @@ indicateur »).
 | Vélocité / Engagement (US) | `{{chart:velocity}}` | engagé vs terminé par sprint (champ Sprint JIRA), + ligne médiane (sprints à 0 terminé exclus). Engagé/terminé en Story Points en axe secondaire (lignes, vs barres US). |
 | Répartition statuts (US) | `{{chart:status}}` | count par statut — dégradé clair -> foncé dans l'ordre du `workflow`, statuts `done_statuses` en vert, statuts "en attente" en orange (même couleurs dans la barre et les cartes). Un statut avec un segment trop étroit pour son libellé reçoit une étiquette externe au-dessus/en dessous de la barre (deux statuts étroits consécutifs alternent de côté). |
 | Cumulative Flow Diagram (US) | `{{chart:cumulative_flow_diagram}}` | bandes empilées, jour par jour, du nb d'US ayant atteint chaque statut du `workflow` configuré (ou un statut suivant) — nécessite `workflow` non vide dans `project.yaml` (contrairement à `{{chart:status}}`, pas de repli par fréquence : l'ordre doit refléter la vraie progression). Reconstruit à partir de l'historique des statuts (`changelog`, voir « Champs JIRA récupérés »). Regroupement des statuts et bornes de dates configurables via le bloc optionnel `cfd:` de `project.yaml` (voir `scaffold/project.example.yaml`) — utile quand `workflow` compte beaucoup d'étapes (bandes trop nombreuses pour rester lisibles). 4 encarts (Périmètre suivi, À faire, En cours, Terminé) — `todo`/`in_progress` distinguent la 1re étape du `workflow` (bloqué en amont) des étapes intermédiaires (réellement en cours), % du périmètre sous chaque compte. |
-| Estimation vs consommé cumulés | `{{chart:cumul_estimation_conso}}` | 3 courbes cumulées jour par jour, du 1er ticket créé du périmètre à aujourd'hui : estimé (tous types hors Epic, `timeoriginalestimate`) et consommé (`timespent`) ajoutés à la date de **création** du ticket (pas sa résolution — choix délibéré pour rester comparable sur le même axe, voir Historique) ; estimé Epics = `timeoriginalestimate` porté par le ticket Epic lui-même (pas le rollup de ses enfants, déjà couvert par `{{liste_epics}}`), ajouté à sa date de création — repère macro face au détail. 4 encarts (Estimé hors Epic, Consommé hors Epic avec écart, Estimé Epics, Écart Epics/détail). « Epic » est un type fixe, jamais paramétrable (même convention que `{{liste_epics}}`). |
+| Estimation vs consommé cumulés | `{{chart:cumul_estimation_conso}}` | 3 courbes cumulées jour par jour, du 1er ticket créé du périmètre à aujourd'hui : estimé (tous types hors Epic, `timeoriginalestimate`) et consommé (`timespent`) ajoutés à la date de **création** du ticket (pas sa résolution — choix délibéré pour rester comparable sur le même axe, voir Historique) ; estimation EPIC initiale = `timeoriginalestimate` porté par le ticket Epic lui-même (pas le rollup de ses enfants), ajouté à sa date de création — repère macro face au détail. Libellés : « Estimation des tickets », « Consommé des tickets », « Estimation EPIC initiale ». 4 encarts (Estimation des tickets, Consommé des tickets avec écart, Estimation EPIC initiale, Écart EPIC initiale/tickets). Totaux identiques à ceux de `{{liste_epics}}`. « Epic » est un type fixe, jamais paramétrable (même convention que `{{liste_epics}}`). |
 | Types de tickets (nb) | `{{chart:types}}` | count par type (tous types), barres colorées par type (voir « Code couleur » ci-dessus) |
 | Types de tickets (conso) | `{{chart:types_conso}}` | timespent en jh par type (tous types), % du total entre parenthèses après la valeur, barres colorées par type |
 | Charge corrective (conso) | `{{chart:conso_corrective}}` | 100% empilé, jh consommés par mois (mois de `resolutiondate`) sur tickets terminés, ventilés en 6 catégories anomalie / incident / Us / US tech / Sous-tâche / Travaux (couleurs du code uniforme ci-dessus) — mapping par type de ticket exact via `anomaly_types`/`incident_types`/`tech_types`/`us_types`/`subtask_types`/`work_types` (config). Ticket terminé dont le type n'est dans aucune des 6 listes : exclu du graphique (pas de 7e bucket "Autre"). |
@@ -208,7 +221,7 @@ indicateur »).
 | Dispersion par étape (US) | `{{chart:dispersion_etapes}}` | Boîtes à moustaches (p10/p25/médiane/p75/p90, en jours) du temps passé par statut du `workflow` configuré — reconstruit via changelog (`indicators.common.status_timeline`, partagé avec `{{chart:cumulative_flow_diagram}}`). Seuls les intervalles clos (statut réellement quitté) sont mesurés, et seulement ceux d'au moins `dispersion_etapes.min_transition_seconds` (project.yaml, défaut 300s = 5 min) — filtre les transitions quasi instantanées (automatisation JIRA à la création, pas un vrai temps passé, voir Historique). Les statuts terminaux (`done_statuses`, même champ que `{{chart:cycle_time}}`) sont **toujours exclus**, même s'ils ont des échantillons (ticket réouvert puis re-sorti) — le temps passé dans un statut terminal n'a pas de lecture agile utile. Couleur par statut = couleur de **groupe** `cfd.groups` (même config, mêmes couleurs que le CFD — `render_agile._cfd_palette`), jamais une palette propre à cette slide ; `cfd.groups` absent -> repli un groupe par statut (dégradé, comme le CFD sans regroupement). Échelle de l'axe dérivée du **p75 maximum** (pas du p90) — la boîte p25-p75 tient donc toujours entière ; une moustache p90 qui dépasse est coupée au bord (flèche + valeur réelle affichée juste après, sur la même ligne), plutôt que d'étirer l'axe entier sur un seul outlier (voir Historique). Valeur médiane affichée sous la boîte, centrée sur le trait médian. Nécessite `workflow` non vide (sinon absent, comme le CFD). |
 | Où passe le temps, étape par étape (US) | `{{chart:temps_par_etape}}` | Même mesure de base que `{{chart:dispersion_etapes}}` (intervalles clos, seuil `min_transition_seconds`, statuts terminaux exclus — calcul partagé via `indicators.common.status_durations`) mais réduite à la **médiane** par statut, cumulée dans l'ordre du `workflow` pour reconstituer un parcours type de la création à la livraison. Deux barres empilées alignées sur le même axe cumulatif : une barre macro par groupe `cfd.groups` (couleurs identiques au CFD) et une barre détaillée par statut (teintes dégradées au sein du groupe). Sous les barres, une carte par statut (numérotée, médiane + « N passages mesurés » — **pas** « N tickets » : un ticket qui repasse par le même statut lors d'un aller-retour dans le workflow y contribue un échantillon par visite, voir Historique) regroupée par section `cfd.groups`. Texte fixe de méthodologie sous le titre (pas une légende coach) et rappel en pied de slide que les médianes ne s'additionnent pas exactement. `cfd.groups` absent -> repli un groupe par statut, comme le CFD. Nécessite `workflow` non vide. |
 | Tableau des sprints (US) | `{{liste_sprints}}` | table native : ajouts/terminés par sprint, cumuls (nb + jh) |
-| Tableau des epics | `{{liste_epics}}` | table native : reste à faire théorique (jh) par epic ; bandeau légende (`coaching.epics_lecture`, optionnel) sous le tableau — tableau à hauteur réduite quand présent, hauteur d'origine sinon (jamais de trou) |
+| Tableau des epics | `{{liste_epics}}` | table native : par epic, Estim. EPIC initiale (`timeoriginalestimate` de l'Epic lui-même, détail des enfants dans `detail_estimate_jh`), Conso (tickets rattachés, directement ou via leur parent : sous-tâche -> US -> Epic), RAF théo ; ligne « Sans EPIC » toujours affichée. Totaux alignés sur `{{chart:cumul_estimation_conso}}` (même population `ticket_filter.cumul_estimation_conso`) ; avancement/projection sur toutes les US du périmètre ; bandeau légende (`coaching.epics_lecture`, optionnel) sous le tableau — tableau à hauteur réduite quand présent, hauteur d'origine sinon (jamais de trou) |
 | KPI cycle time | `{{kpi:*}}` | cartes de synthèse cycle time (voir placeholders texte ci-dessous) |
 | Synthèse du coach | `{{coach:synthese}}` | texte rédigé par Claude en session, voir `COACH_PROMPT.md` — conditionnel, sauté si absent du template |
 | Décisions & questions | `{{coach:decisions}}` | `coaching.delta` (ce qui a bougé depuis la synthèse précédente) et `coaching.questions` (2-3 questions de coach affichées sur la slide, distinctes des questions de session) — slide entièrement retirée du PPT si les deux sont absents, voir COACH_PROMPT.md |
@@ -341,6 +354,34 @@ racine du skill.
 
 ## Historique / suivi
 
+- 2026-10-02 — `{{liste_epics}}` aligné sur `{{chart:cumul_estimation_conso}}`
+  (demande explicite, NOS : 1 182 jh « estimé Epics » d'un côté, 1 330 jh
+  « Estim. » de l'autre, jugé confusant). Choix tranchés en session :
+  - **Estim. EPIC initiale** par ligne = estimation portée par l'Epic
+    elle-même (plus le rollup de ses enfants, conservé en
+    `detail_estimate_jh`) — les Epics créées sans chiffrage macro affichent 0
+    et un RAF théo négatif, c'est voulu ;
+  - **Consommé** total = celui de `cumul_estimation_conso` (tous les tickets
+    non-Epic de la même population) ; ligne « Sans EPIC » (`epics.no_epic`)
+    pour que la somme des lignes retombe sur le total. Sous-tâches désormais
+    rattachées à l'Epic de leur ticket parent (auparavant ignorées) ;
+  - **avancement** et **projection théorique** sur toutes les US du
+    périmètre, y compris sans EPIC ; prévisibilité calculée contre
+    l'estimation EPIC initiale ;
+  - libellés de `cumul_estimation_conso` : « Estimation des tickets »,
+    « Consommé des tickets », « Estimation EPIC initiale ».
+
+- 2026-10-02 — `ticket_filter` par indicateur (project.yaml) : remplace les
+  filtres de type codés en dur (`us_types` ou aucun) par une liste
+  paramétrable par placeholder, filtrée en mémoire (choix explicite : pas une
+  requête JQL par indicateur). Clé absente = comportement antérieur à
+  l'identique (vérifié sur NOA et NOS : `build_metrics` ancien vs nouveau code,
+  même JSON). Liste vide = tous les tickets. Sur `conso_corrective`/`defauts_*`,
+  restriction d'entrée seulement, classement inchangé. `tempo_types` avec
+  filtre écarte les worklogs des tickets exclus (au lieu de les ranger en
+  « Inconnu ») ; `tempo_conso` filtre les worklogs par type, ses « US
+  terminées » suivent `ticket_filter.burnup`. `common.status_durations` ne
+  prend plus `us_types` (l'appelant passe des tickets déjà filtrés).
 - Nom du PPT généré : la clé projet s'insère après la date,
   `<AAAAMMJJ>-<clé>-indicateurs.pptx` (ex. `20260930-NOS_R2.1-indicateurs.pptx`)
   — demande explicite, pour distinguer les fichiers une fois sortis de leur
@@ -368,9 +409,10 @@ racine du skill.
     pas seulement `us_types` — peut compter en double une sous-tâche et son
     US parente si les deux portent une estimation propre ;
   - l'estimé Epics vient du champ `timeoriginalestimate` de l'Epic
-    **lui-même**, pas d'un rollup de ses enfants (déjà couvert par
-    `epics.total_estimate_jh`, `fetch_jira.py:build_epics`) — deux notions
-    volontairement distinctes, jamais confondues.
+    **lui-même**, pas d'un rollup de ses enfants — à l'époque couvert par
+    `epics.total_estimate_jh` (`fetch_jira.py:build_epics`) ; depuis le
+    2026-10-02, `build_epics` reprend lui aussi l'estimation de l'Epic
+    elle-même (voir entrée correspondante).
   Aucun nouveau champ `project.yaml` (réutilise `seconds_per_day`) ; « Epic »
   reste un type fixe, jamais paramétrable, comme dans `build_epics`. Insérée
   juste après `{{chart:cumulative_flow_diagram}}` dans les deux

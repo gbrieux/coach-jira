@@ -100,6 +100,7 @@ SIZE_SLIDE_TITLE = pt_from_px(58)   # 29 pt
 SIZE_CARD_LABEL = pt_from_px(20)    # 10 pt
 SIZE_KPI_BIG = pt_from_px(86)       # 43 pt
 SIZE_CARD_NUMBER = pt_from_px(60)   # 30 pt
+SIZE_CARD_NUMBER_COMPACT = pt_from_px(48)  # 24 pt — carte à libellé sur 2 lignes (_card_stat label_lines=2)
 SIZE_BODY = pt_from_px(25)          # 12.5 pt
 SIZE_TABLE_CELL = pt_from_px(24)    # 12 pt
 SIZE_LEGEND = pt_from_px(24)        # 12 pt

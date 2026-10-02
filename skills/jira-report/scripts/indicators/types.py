@@ -2,7 +2,7 @@
 from collections import defaultdict
 
 import render_agile
-from indicators.common import to_float
+from indicators.common import filter_issues, to_float
 
 RENDERERS = {
     "types": render_agile.render_types,
@@ -15,7 +15,7 @@ def compute(issues, sprints, conf):
     type_counts = defaultdict(int)
     type_conso = defaultdict(float)
 
-    for it in issues:
+    for it in filter_issues(issues, conf, "types"):
         f = it["fields"]
         itype = (f.get("issuetype") or {}).get("name", "Inconnu")
         type_counts[itype] += 1

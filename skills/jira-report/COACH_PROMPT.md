@@ -189,7 +189,10 @@ Relever ce qui relève de la saisie et non de la performance, et le traiter comm
   sont terminées) ;
 - éléments avec conso mais sans estimation, ou l'inverse ;
 - US engagées sans estimation (`sp_engaged` nul avec des US engagées) ;
-- `estimate_jh` à zéro sur un epic démarré ;
+- `estimate_jh` (estimation EPIC initiale, portée par l'Epic elle-même) à zéro sur
+  un epic démarré — fréquent pour les Epics créées après le chiffrage initial ;
+  comparer alors à `detail_estimate_jh` (somme des tickets enfants) ;
+- poids de la ligne `epics.no_epic` (« Sans EPIC ») dans le consommé total ;
 - écart entre deux attributions temporelles du même fait (§1.4) ;
 - `not_started_count` élevé rapporté au nombre total d'epics.
 
@@ -281,7 +284,9 @@ Trois méthodes indépendantes, à confronter :
 2. **Reste ÷ vélocité** : (`scope_cumul_us` − `done_cumul_us`) rapporté à
    `median_velocity_us`, `avg_velocity` et à `burnup_release.velocity_us`.
 3. **Projection en charge** : `epics.projection_theorique_jh` face à
-   `epics.total_estimate_jh`, après la jointure §1.2.
+   `epics.total_estimate_jh` (estimation EPIC initiale), après la jointure §1.2.
+   La projection porte sur toutes les US du périmètre et sur le consommé de tous
+   les tickets (y compris « Sans EPIC »).
 
 Convergence des trois — l'affirmation est tenable en comité. Divergence — c'est ça le
 sujet, et il faut le nommer.
@@ -556,7 +561,7 @@ Cas particuliers :
   date de **création** du ticket, pas à sa résolution — contrairement à
   `burnup_release.conso_cumul_us_jh`/`conso_corrective.total_jh`. Ne jamais
   comparer directement ce consommé à celui d'une autre slide sans le préciser
-  (voir §1.4). L'écart entre « estimé Epics » et « estimé (hors Epic) » est un
+  (voir §1.4). L'écart entre « Estimation EPIC initiale » et « Estimation des tickets » est un
   écart de **maille** (macro au lancement de l'Epic vs micro somme des
   tickets), jamais une anomalie de saisie en soi — ne le lire comme un
   problème que si le contexte le confirme.

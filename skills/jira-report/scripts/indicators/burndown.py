@@ -3,7 +3,7 @@ from datetime import timedelta, timezone
 from datetime import datetime as _datetime
 
 import render_agile
-from indicators.common import parse_dt, sprint_names, to_float
+from indicators.common import filter_issues, parse_dt, sprint_names, to_float
 
 RENDERERS = {
     "burndown": render_agile.render_burndown,
@@ -17,7 +17,7 @@ def compute(issues, sprints, conf):
     reste à faire jour par jour vs droite idéale. Périmètre = toute US dont
     le champ Sprint JIRA inclut le sprint actif à date (reports inclus, pas
     seulement les US ajoutées pendant ce sprint)."""
-    us_types = set(conf["us_types"])
+    issues = filter_issues(issues, conf, "burndown", conf["us_types"])
     done_statuses = set(conf["done_statuses"])
     spr_field = conf["sprint_field"]
     sp_field = conf["story_points_field"]
@@ -33,9 +33,6 @@ def compute(issues, sprints, conf):
     scope_issues = []
     for it in issues:
         f = it["fields"]
-        itype = (f.get("issuetype") or {}).get("name", "")
-        if itype not in us_types:
-            continue
         if active["name"] in sprint_names(f.get(spr_field)):
             scope_issues.append(f)
     scope = len(scope_issues)

@@ -34,7 +34,7 @@ from datetime import timezone
 from datetime import datetime as _datetime
 
 import render_agile
-from indicators.common import parse_dt, to_float
+from indicators.common import filter_issues, parse_dt, to_float
 
 RENDERERS = {"conso_corrective": render_agile.render_conso_corrective}
 
@@ -76,7 +76,7 @@ def compute(issues, sprints, conf):
     spd = conf["seconds_per_day"]
 
     by_month = defaultdict(lambda: defaultdict(float))
-    for it in issues:
+    for it in filter_issues(issues, conf, "conso_corrective"):
         f = it["fields"]
         if (f.get("status") or {}).get("name") not in done_statuses:
             continue

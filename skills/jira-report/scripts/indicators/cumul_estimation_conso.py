@@ -15,9 +15,9 @@ ticket créé dans le périmètre à aujourd'hui :
     au jour J peut inclure du temps réellement loggé bien après J, sur des
     tickets créés avant J mais exécutés plus tard (voir COACH_PROMPT.md,
     `cumul_estimation_conso_lecture`).
-  - **estimé Epics** (jh) : somme cumulée de `timeoriginalestimate` porté par
-    le ticket Epic **lui-même** (pas le rollup de ses enfants, déjà couvert
-    par `epics.total_estimate_jh`, voir fetch_jira.py:build_epics), ajoutée
+  - **estimation EPIC initiale** (jh) : somme cumulée de `timeoriginalestimate`
+    porté par le ticket Epic **lui-même** (pas le rollup de ses enfants —
+    même total que `epics.total_estimate_jh`, voir fetch_jira.py:build_epics), ajoutée
     au jour de création de l'Epic. Repère macro (estimation au lancement de
     l'Epic) en regard du micro (somme des estimations unitaires des tickets,
     courbe "estimé" ci-dessus) — les deux ne sont pas censées coïncider en
@@ -30,7 +30,7 @@ from datetime import timedelta, timezone
 from datetime import datetime as _datetime
 
 import render_agile
-from indicators.common import parse_dt, to_float
+from indicators.common import filter_issues, parse_dt, to_float
 
 RENDERERS = {"cumul_estimation_conso": render_agile.render_cumul_estimation_conso}
 
@@ -42,7 +42,7 @@ def compute(issues, sprints, conf):
     consumed_by_day = {}
     epic_estimate_by_day = {}
 
-    for it in issues:
+    for it in filter_issues(issues, conf, "cumul_estimation_conso"):
         f = it["fields"]
         created = parse_dt(f.get("created"))
         if created is None:
