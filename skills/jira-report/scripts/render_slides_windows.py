@@ -51,10 +51,12 @@ def main():
         print(f"ERREUR: {e}", file=sys.stderr)
         sys.exit(1)
 
-    # Nom daté (YYYYMMDD-indicateurs.pptx, voir build_ppt.py) — plusieurs
-    # fichiers peuvent coexister (un par date de données) ; le tri lexical
-    # suffit (préfixe zero-paddé) pour prendre le plus récent.
-    candidates = sorted(out.glob("*-indicateurs.pptx"), reverse=True)
+    # Nom daté (YYYYMMDD-<clé>-indicateurs.pptx, voir build_ppt.py ; ancien
+    # format YYYYMMDD-indicateurs.pptx encore présent dans certains dossiers) —
+    # plusieurs fichiers peuvent coexister : tri sur le préfixe date, puis sur
+    # la date de modification pour départager deux formats du même jour.
+    candidates = sorted(out.glob("*-indicateurs.pptx"),
+                        key=lambda p: (p.name[:8], p.stat().st_mtime), reverse=True)
     if not candidates:
         print(f"ERREUR: aucun *-indicateurs.pptx dans {out} — lancer build_ppt.py d'abord.", file=sys.stderr)
         sys.exit(1)

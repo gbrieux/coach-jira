@@ -1242,12 +1242,22 @@ def render_status(slide, placeholder_shape, data, template_path, page_num, total
         external_lane += 1
 
     # ------------------------------------------------------------- cartes
+    # Encart « Temps de cycle » (sprint_cycle_time, voir sprint_spread.py) :
+    # occupe la 4e colonne sur toute la hauteur de la grille, les cartes par
+    # nombre de sprints se replient alors sur 3 colonnes. Absent (data.json
+    # antérieur) ou vide -> grille 4 colonnes comme avant.
+    ct = m.get("sprint_cycle_time") or {}
+    with_cycle = bool(ct.get("count"))
     grid_y = bar_y + bar_h + GAP_BELOW
-    cols = 4
     gap = 24
-    card_w = (S.CONTENT_W - gap * (cols - 1)) / cols
+    card_w = (S.CONTENT_W - gap * 3) / 4
+    cols = 3 if with_cycle else 4
     rows = math.ceil(len(items) / cols)
     card_h = min(300, (S.CONTENT_H - ABOVE_H - bar_h - GAP_BELOW - gap * (rows - 1)) / rows)
+
+    if with_cycle:
+        _card_sprint_cycle(slide, S.MARGIN_X + 3 * (card_w + gap), grid_y, card_w,
+                           max(rows * card_h + gap * (rows - 1), 260), ct)
 
     for i, (name, count) in enumerate(items):
         r, c = divmod(i, cols)
@@ -1333,12 +1343,22 @@ def render_sprint_spread(slide, placeholder_shape, data, template_path, page_num
                         anchor=MSO_ANCHOR.MIDDLE)
 
     # ------------------------------------------------------------- cartes
+    # Encart « Temps de cycle » (sprint_cycle_time, voir sprint_spread.py) :
+    # occupe la 4e colonne sur toute la hauteur de la grille, les cartes par
+    # nombre de sprints se replient alors sur 3 colonnes. Absent (data.json
+    # antérieur) ou vide -> grille 4 colonnes comme avant.
+    ct = m.get("sprint_cycle_time") or {}
+    with_cycle = bool(ct.get("count"))
     grid_y = bar_y + bar_h + GAP_BELOW
-    cols = 4
     gap = 24
-    card_w = (S.CONTENT_W - gap * (cols - 1)) / cols
+    card_w = (S.CONTENT_W - gap * 3) / 4
+    cols = 3 if with_cycle else 4
     rows = math.ceil(len(items) / cols)
     card_h = min(300, (S.CONTENT_H - ABOVE_H - bar_h - GAP_BELOW - gap * (rows - 1)) / rows)
+
+    if with_cycle:
+        _card_sprint_cycle(slide, S.MARGIN_X + 3 * (card_w + gap), grid_y, card_w,
+                           max(rows * card_h + gap * (rows - 1), 260), ct)
 
     for i, (nb, count) in enumerate(items):
         r, c = divmod(i, cols)
@@ -3095,6 +3115,110 @@ def render_cycle_time(slide, placeholder_shape, data, template_path, page_num, t
         _card_stat(slide, RAIL_X, y, RAIL_W, card_h, "P85", f"{_fr_num(ct['p85'])} j", "")
 
     SH.add_footer(slide, project_name, page_num, total_pages)
+
+
+# ========================================================= sprint_cycle_trend
+def render_sprint_cycle_trend(slide, placeholder_shape, data, template_path, page_num, total_pages):
+    """P15 / médiane / P85 du temps de cycle (entrée en sprint -> 1er statut
+    terminé) par sprint d'entrée — voir indicators/sprint_cycle_trend.py.
+    Point orange = sprint dont des US entrées ne sont pas encore terminées :
+    sa valeur ne compte que les US déjà finies, donc les plus rapides."""
+    m = data["metrics"]
+    project_name = data["project_name"].strip()
+    SH.clear_legacy_chrome(slide)
+    SH.clear_placeholder(placeholder_shape)
+
+    trend = m.get("sprint_cycle_trend")
+    title = "Évolution du temps de cycle par sprint"
+    if not trend:
+        SH.add_header(slide, "0 US MESURÉE", title, template_path)
+        SH.add_text(slide, S.MARGIN_X, S.CONTENT_Y + 40, S.CONTENT_W, 60,
+                    "Aucune US terminée rattachée à un sprint daté.",
+                    size=S.SIZE_BODY, color=S.TEXT_SECONDARY)
+        SH.add_footer(slide, project_name, page_num, total_pages)
+        return
+
+    items = trend["items"]
+    total = sum(it["count"] for it in items)
+    SH.add_header(slide, f"{total} US MESURÉES", title, template_path)
+
+    cats = [short_label(it["sprint"]) for it in items]
+    cd = CategoryChartData()
+    cd.categories = cats
+    cd.add_series("P85", [it["p85"] for it in items])
+    cd.add_series("Médiane", [it["median"] for it in items])
+    cd.add_series("P15", [it["p15"] for it in items])
+    gf = slide.shapes.add_chart(XL_CHART_TYPE.LINE, S.px(S.MARGIN_X), S.px(S.CONTENT_Y),
+                                 S.px(CHART_W), S.px(S.CONTENT_H), cd)
+    chart = gf.chart
+    chart.has_title = False
+    _set_manual_plot_area(chart, 0.02, 0.03, 0.96, 0.80)
+
+    p85_s, med_s, p15_s = chart.plots[0].series
+    _style_line_series(p85_s, S.BLUE_FILL_1, 2, dash=MSO_LINE_DASH_STYLE.DASH)
+    _style_line_series(med_s, S.BRAND_PRIMARY, 4)
+    _style_line_series(p15_s, S.BLUE_FILL_1, 2, dash=MSO_LINE_DASH_STYLE.ROUND_DOT)
+    for i, it in enumerate(items):
+        if it["median"] is not None:
+            _mark_arrival_point(med_s, i, S.BRAND_ACCENT if it["open"] else S.BRAND_PRIMARY)
+
+    chart.has_legend = True
+    chart.legend.position = XL_LEGEND_POSITION.BOTTOM
+    chart.legend.include_in_layout = False
+    chart.legend.font.size = S.SIZE_LEGEND
+    chart.legend.font.color.rgb = S.TEXT_PRIMARY
+
+    cat_ax = chart.category_axis
+    cat_ax.format.line.color.rgb = S.CARD_BORDER
+    cat_ax.tick_labels.font.size = Pt(9.5)
+    cat_ax.tick_labels.font.color.rgb = S.TEXT_FOOTER
+
+    val_ax = chart.value_axis
+    val_ax.minimum_scale = 0
+    val_ax.has_major_gridlines = True
+    val_ax.major_gridlines.format.line.color.rgb = S.CARD_BORDER_INNER
+    val_ax.tick_labels.font.size = Pt(9.5)
+    val_ax.tick_labels.font.color.rgb = S.TEXT_FOOTER
+    val_ax.format.line.fill.background()
+
+    # ------------------------------------------------------------ rail droit
+    y = S.CONTENT_Y
+    ct = m.get("sprint_cycle_time") or {}
+    if ct.get("count"):
+        _card_stat(slide, RAIL_X, y, RAIL_W, 174, "MÉDIANE GLOBALE", f"{_fr_num(ct['median'])} j",
+                   f"P15 {_fr_num(ct['p15'])} j · P85 {_fr_num(ct['p85'])} j")
+        y += 174 + 20
+    incomplete = [it for it in items if it["open"] and it["count"]]
+    n_open = sum(it["open"] for it in incomplete)
+    _card_stat(slide, RAIL_X, y, RAIL_W, 174, "SPRINTS INCOMPLETS", str(len(incomplete)),
+               f"{n_open} US ouvertes · orange")
+    y += 174 + 20
+
+    lecture = (data.get("coaching") or {}).get("sprint_cycle_trend_lecture", "")
+    _card_lecture(slide, RAIL_X, y, RAIL_W, S.CONTENT_Y + S.CONTENT_H - y, lecture)
+
+    SH.add_footer(slide, project_name, page_num, total_pages)
+
+
+def _card_sprint_cycle(slide, x, y, w, h, ct):
+    """Encart rose (mêmes couleurs que « Points de vigilance » de
+    {{chart:kpi}}) : médiane en gros, P15/P85 en petit en bas."""
+    SH.add_rounded_rect(slide, x, y, w, h, fill=S.ALERT_BG, line_color=S.ALERT_BORDER)
+    pad = S.CARD_PADDING_PX
+    SH.add_text(slide, x + pad, y + pad, w - 2 * pad, 30, "Temps de cycle d'un ticket",
+                size=S.SIZE_CARD_LABEL, color=S.ALERT_TEXT, bold=True, all_caps=True)
+    big_y = y + max(pad + 50, h * 0.30)
+    SH.add_text(slide, x + pad, big_y, w - 2 * pad, 94, f"{_fr_num(ct['median'])} j",
+                size=S.SIZE_KPI_BIG, color=S.BRAND_ACCENT, bold=True)
+    SH.add_text(slide, x + pad, big_y + 98, w - 2 * pad, 26, "médiane",
+                size=Pt(12), color=S.ALERT_TEXT, bold=True)
+    end = ct.get("done_label") or "statut terminé"
+    SH.add_text(slide, x + pad, y + h - pad - 36 - 78, w - 2 * pad, 72,
+                f"{ct['count']} US terminées, de l'entrée en sprint à « {end} »",
+                size=Pt(12), color=S.ALERT_TEXT, anchor=MSO_ANCHOR.BOTTOM)
+    SH.add_text(slide, x + pad, y + h - pad - 30, w - 2 * pad, 30,
+                f"P15 {_fr_num(ct['p15'])} j · P85 {_fr_num(ct['p85'])} j",
+                size=Pt(14), color=S.ALERT_TEXT, bold=True)
 
 
 # ======================================================================= kpi

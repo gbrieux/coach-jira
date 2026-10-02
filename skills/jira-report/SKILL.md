@@ -108,7 +108,7 @@ le détail des champs) — ne jamais inventer de token, de JQL ou de board_id.
 5. **Générer le PPT.** `python scripts/build_ppt.py <clé>` (ou `--all`) → lit le
    JSON + `templates/template.pptx`, génère chaque slide dans le design agile
    (voir `scripts/style.py`/`scripts/render_agile.py`), écrit
-   `projects/<clé>/output/<AAAAMMJJ>-indicateurs.pptx` — préfixe daté (format
+   `projects/<clé>/output/<AAAAMMJJ>-<clé>-indicateurs.pptx` — préfixe daté (format
    américain trié) sur la date de `generated_at` (date des données, pas du
    build : rebuilder sans refetch écrase le même fichier). C'est l'étape que
    fait `/coach-ppt` : elle ne réécrit la synthèse (étape 4) que si elle est
@@ -203,7 +203,8 @@ indicateur »).
 | Conso Tempo vs US terminées | `{{chart:tempo_conso}}` | barres : conso Tempo (jh, worklogs agrégés par sprint via leur date de log) ; ligne (axe secondaire) : nb d'US terminées par sprint. Nécessite Tempo installé sur le projet **et** `TEMPO_API_TOKEN`/`TEMPO_NAME` dans `.env` (voir « Configuration ») — absent des deux : message "Données Tempo JIRA non disponibles" à la place du graphique, jamais de graphique vide. |
 | Temps Tempo par type de ticket (conso) | `{{chart:tempo_types}}` | barres empilées en volume absolu (jh), worklogs Tempo agrégés par mois du log — une série par type de ticket JIRA exact rencontré (tous types, pas de regroupement), triées par jh décroissant, couleurs du code uniforme ci-dessus. Même dépendance Tempo que `{{chart:tempo_conso}}` (même message si absent). |
 | Lead time (US) | `{{chart:cycle_time}}` | P15 / médiane / moyenne / P85 — affiché « Lead time » (création -> résolution), pas « Cycle time » : voir Historique. Champ/placeholder JSON inchangés (`cycle_time`, `{{kpi:cycle_*}}`). |
-| Répartition par nombre de sprints (US) | `{{chart:sprint_spread}}` | US terminées, groupées par nombre de sprints distincts traversés (champ Sprint JIRA) — dégradé clair (1 sprint) -> foncé (le plus de sprints). US sans sprint renseigné exclues (rien à mesurer). |
+| Répartition par nombre de sprints (US) | `{{chart:sprint_spread}}` | US terminées, groupées par nombre de sprints distincts traversés (champ Sprint JIRA) — dégradé clair (1 sprint) -> foncé (le plus de sprints). US sans sprint renseigné exclues (rien à mesurer). Encart rose « Temps de cycle d'un ticket » (`sprint_cycle_time`) : médiane + P15/P85 (jours calendaires) de l'entrée en sprint (plus tardif de : 1re affectation à un sprint, début du 1er sprint) au 1er passage dans un `done_statuses`, US terminées seulement. |
+| Évolution du temps de cycle par sprint (US) | `{{chart:sprint_cycle_trend}}` | P15 / médiane / P85 du temps de cycle (même mesure que l'encart de `{{chart:sprint_spread}}` : entrée en sprint -> 1er `done_statuses`) par **sprint d'entrée**. Point orange = sprint avec des US entrées pas encore terminées (valeur biaisée vers le bas). Légende coach `sprint_cycle_trend_lecture`. |
 | Dispersion par étape (US) | `{{chart:dispersion_etapes}}` | Boîtes à moustaches (p10/p25/médiane/p75/p90, en jours) du temps passé par statut du `workflow` configuré — reconstruit via changelog (`indicators.common.status_timeline`, partagé avec `{{chart:cumulative_flow_diagram}}`). Seuls les intervalles clos (statut réellement quitté) sont mesurés, et seulement ceux d'au moins `dispersion_etapes.min_transition_seconds` (project.yaml, défaut 300s = 5 min) — filtre les transitions quasi instantanées (automatisation JIRA à la création, pas un vrai temps passé, voir Historique). Les statuts terminaux (`done_statuses`, même champ que `{{chart:cycle_time}}`) sont **toujours exclus**, même s'ils ont des échantillons (ticket réouvert puis re-sorti) — le temps passé dans un statut terminal n'a pas de lecture agile utile. Couleur par statut = couleur de **groupe** `cfd.groups` (même config, mêmes couleurs que le CFD — `render_agile._cfd_palette`), jamais une palette propre à cette slide ; `cfd.groups` absent -> repli un groupe par statut (dégradé, comme le CFD sans regroupement). Échelle de l'axe dérivée du **p75 maximum** (pas du p90) — la boîte p25-p75 tient donc toujours entière ; une moustache p90 qui dépasse est coupée au bord (flèche + valeur réelle affichée juste après, sur la même ligne), plutôt que d'étirer l'axe entier sur un seul outlier (voir Historique). Valeur médiane affichée sous la boîte, centrée sur le trait médian. Nécessite `workflow` non vide (sinon absent, comme le CFD). |
 | Où passe le temps, étape par étape (US) | `{{chart:temps_par_etape}}` | Même mesure de base que `{{chart:dispersion_etapes}}` (intervalles clos, seuil `min_transition_seconds`, statuts terminaux exclus — calcul partagé via `indicators.common.status_durations`) mais réduite à la **médiane** par statut, cumulée dans l'ordre du `workflow` pour reconstituer un parcours type de la création à la livraison. Deux barres empilées alignées sur le même axe cumulatif : une barre macro par groupe `cfd.groups` (couleurs identiques au CFD) et une barre détaillée par statut (teintes dégradées au sein du groupe). Sous les barres, une carte par statut (numérotée, médiane + « N passages mesurés » — **pas** « N tickets » : un ticket qui repasse par le même statut lors d'un aller-retour dans le workflow y contribue un échantillon par visite, voir Historique) regroupée par section `cfd.groups`. Texte fixe de méthodologie sous le titre (pas une légende coach) et rappel en pied de slide que les médianes ne s'additionnent pas exactement. `cfd.groups` absent -> repli un groupe par statut, comme le CFD. Nécessite `workflow` non vide. |
 | Tableau des sprints (US) | `{{liste_sprints}}` | table native : ajouts/terminés par sprint, cumuls (nb + jh) |
@@ -274,7 +275,7 @@ template est bien annoté.
 
 ## QA
 
-`projects/<clé>/output/<AAAAMMJJ>-indicateurs.pptx` ci-dessous est dans le
+`projects/<clé>/output/<AAAAMMJJ>-<clé>-indicateurs.pptx` ci-dessous est dans le
 répertoire de données (voir « Répertoire de données » plus haut), pas dans le
 repo skill — nom daté sur `generated_at` (voir « Workflow », étape 5) :
 remplacer `<AAAAMMJJ>` par la date affichée par `build_ppt.py` en sortie, ou
@@ -284,18 +285,18 @@ prendre le plus récent (`ls -1 <data>/projects/<clé>/output/*-indicateurs.pptx
 
 Fichier :
 ```bash
-python /mnt/skills/public/pptx/scripts/office/validate.py "<data>/projects/<clé>/output/<AAAAMMJJ>-indicateurs.pptx" --original "<data>/templates/template.pptx"
+python /mnt/skills/public/pptx/scripts/office/validate.py "<data>/projects/<clé>/output/<AAAAMMJJ>-<clé>-indicateurs.pptx" --original "<data>/templates/template.pptx"
 ```
 
 Placeholders restants (aucun ne doit subsister) :
 ```bash
-markitdown "<data>/projects/<clé>/output/<AAAAMMJJ>-indicateurs.pptx" | grep -oE "\{\{[^}]+\}\}" && echo "PLACEHOLDERS RESTANTS" || echo "OK"
+markitdown "<data>/projects/<clé>/output/<AAAAMMJJ>-<clé>-indicateurs.pptx" | grep -oE "\{\{[^}]+\}\}" && echo "PLACEHOLDERS RESTANTS" || echo "OK"
 ```
 
 Visuel : convertir en images et inspecter (overflow, charts vides, alignement) :
 ```bash
-python /mnt/skills/public/pptx/scripts/office/soffice.py --headless --convert-to pdf "<data>/projects/<clé>/output/<AAAAMMJJ>-indicateurs.pptx"
-pdftoppm -jpeg -r 150 "<data>/projects/<clé>/output/<AAAAMMJJ>-indicateurs.pdf" slide && ls -1 "$PWD"/slide-*.jpg
+python /mnt/skills/public/pptx/scripts/office/soffice.py --headless --convert-to pdf "<data>/projects/<clé>/output/<AAAAMMJJ>-<clé>-indicateurs.pptx"
+pdftoppm -jpeg -r 150 "<data>/projects/<clé>/output/<AAAAMMJJ>-<clé>-indicateurs.pdf" slide && ls -1 "$PWD"/slide-*.jpg
 ```
 
 **Poste local Windows (pas de `soffice`/`pdftoppm`/`markitdown`) :**
@@ -307,7 +308,7 @@ python -c "
 from pptx import Presentation
 import re
 pat = re.compile(r'\{\{[^}]+\}\}')
-prs = Presentation('<data>/projects/<clé>/output/<AAAAMMJJ>-indicateurs.pptx')
+prs = Presentation('<data>/projects/<clé>/output/<AAAAMMJJ>-<clé>-indicateurs.pptx')
 found = []
 for i, slide in enumerate(prs.slides, 1):
     for shape in slide.shapes:
@@ -340,6 +341,13 @@ racine du skill.
 
 ## Historique / suivi
 
+- Nom du PPT généré : la clé projet s'insère après la date,
+  `<AAAAMMJJ>-<clé>-indicateurs.pptx` (ex. `20260930-NOS_R2.1-indicateurs.pptx`)
+  — demande explicite, pour distinguer les fichiers une fois sortis de leur
+  dossier `projects/<clé>/output/`. Les anciens `<AAAAMMJJ>-indicateurs.pptx`
+  restent en place (jamais renommés) ; `render_slides_windows.py` trie sur le
+  préfixe date puis sur la date de modification pour prendre le plus récent
+  quel que soit le format.
 - Nouvelle slide **`{{chart:cumul_estimation_conso}}`** (« Estimation vs
   consommé cumulés ») — demande explicite : voir 3 courbes cumulées jour par
   jour (estimé/consommé hors Epic, estimé Epics). Choix de conception tranchés
@@ -774,3 +782,19 @@ racine du skill.
   `render_slides_windows.py` et `scripts/inspect_template.py`-like tooling
   doivent prendre le plus récent (`sorted(glob("*-indicateurs.pptx"))[-1]`)
   plutôt qu'un nom fixe.
+- `{{chart:sprint_spread}}` : encart rose « Temps de cycle d'un ticket »
+  (colonne de droite, les cartes par nombre de sprints passent sur 3
+  colonnes), calculé dans `indicators/sprint_spread.py` (`sprint_cycle_time`).
+  Début = plus tardif de la 1re affectation à un sprint (changelog, champ
+  Sprint ; à défaut la création) et du début du 1er sprint de l'US ; fin =
+  1re transition vers un `done_statuses` (NOS : « Attente livraison recette
+  métier »), à défaut `resolutiondate`. Toutes les US terminées, y compris
+  multi-sprints. Distinct de `cycle_time` (création -> résolution, affiché
+  « lead time »). Aucun nouveau champ `project.yaml`, aucune slide ajoutée.
+- `{{chart:sprint_cycle_trend}}` ajouté (`indicators/sprint_cycle_trend.py`,
+  `render_agile.render_sprint_cycle_trend`, slide insérée après
+  `{{chart:sprint_spread}}` dans les deux `template.pptx`) : courbes P15 /
+  médiane / P85 du temps de cycle par sprint d'entrée, rail droit (médiane
+  globale, sprints incomplets, `sprint_cycle_trend_lecture`). La règle de
+  mesure est factorisée dans `indicators/common.sprint_cycle`, partagée avec
+  l'encart de `{{chart:sprint_spread}}`.

@@ -166,6 +166,67 @@ def status_durations(issues, us_types, workflow, min_transition_seconds, id_to_c
     return durations, contributors
 
 
+# ------------------------------------------ temps de cycle depuis l'entrée en sprint
+# Partagé par sprint_spread.py (encart « Temps de cycle d'un ticket ») et
+# sprint_cycle_trend.py (évolution par sprint) — une seule règle de mesure.
+def _first_sprint_added(issue):
+    """Date de la première affectation à un sprint (changelog, champ
+    « Sprint »), ou None."""
+    dates = []
+    for h in (issue.get("changelog") or {}).get("histories") or []:
+        hdt = parse_dt(h.get("created"))
+        if hdt is None:
+            continue
+        for item in h.get("items", []):
+            if (item.get("field") or "").lower() == "sprint" and (item.get("to") or item.get("toString")):
+                dates.append(hdt)
+    return min(dates) if dates else None
+
+
+def first_sprint(raw, sprint_starts):
+    """(nom, date de début) du premier sprint de l'US — celui qui démarre le
+    plus tôt. Date lue sur le champ sprint du ticket (`startDate`), à défaut
+    sur la liste des sprints du board (`sprint_starts` : nom -> datetime).
+    (None, None) si aucun sprint daté."""
+    best = (None, None)
+    for entry in (raw if isinstance(raw, list) else [raw] if raw else []):
+        names = sprint_names([entry])
+        if not names:
+            continue
+        dt = parse_dt(entry.get("startDate")) if isinstance(entry, dict) else None
+        dt = dt or sprint_starts.get(names[0])
+        if dt is not None and (best[1] is None or dt < best[1]):
+            best = (names[0], dt)
+    return best
+
+
+def sprint_cycle(issue, spr_field, done_statuses, sprint_starts, id_to_current_name):
+    """(nom du sprint d'entrée, jours) — délai calendaire entre l'entrée en
+    sprint et le premier passage dans un statut de `done_statuses`.
+
+    Entrée = le plus tardif de la première affectation à un sprint (à défaut
+    la création, cas d'une US créée directement dans un sprint) et du début
+    du premier sprint : une US ajoutée avant le démarrage commence au
+    démarrage, une US ajoutée en cours de sprint à son ajout. Fin = première
+    transition vers un `done_statuses`, à défaut `resolutiondate`.
+    `jours` vaut None si l'une des deux dates manque ou si l'US est terminée
+    avant d'entrer en sprint — exclue plutôt qu'estimée."""
+    f = issue["fields"]
+    sprint_name, sprint_start = first_sprint(f.get(spr_field), sprint_starts)
+    added = _first_sprint_added(issue) or parse_dt(f.get("created"))
+    candidates = [d for d in (added, sprint_start) if d is not None]
+    done_at = None
+    for dt, status_id, raw_name in status_timeline(issue)[1:]:
+        if id_to_current_name.get(status_id, raw_name) in done_statuses:
+            done_at = dt
+            break
+    done_at = done_at or parse_dt(f.get("resolutiondate"))
+    if not candidates or done_at is None:
+        return sprint_name, None
+    days = (done_at - max(candidates)).total_seconds() / 86400
+    return sprint_name, (days if days >= 0 else None)
+
+
 # Clé de bucket pour les tickets déjà créés mais jamais affectés à un sprint
 # (backlog) — matérialisée en "Sprint 0" dans le burnup/tableau pour que le
 # périmètre cumulé US parte du vrai chiffre dès le début, pas de 0.

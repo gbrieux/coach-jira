@@ -42,7 +42,8 @@ ticket réelle. Il ne parle que de noms de champs du JSON et de règles.
   "defauts_delai_origine_lecture": "…",
   "dispersion_etapes_lecture": "…",
   "temps_par_etape_lecture": "…",
-  "cumul_estimation_conso_lecture": "…"
+  "cumul_estimation_conso_lecture": "…",
+  "sprint_cycle_trend_lecture": "…"
 }
 ```
 
@@ -500,6 +501,7 @@ chaque variante.
 | `dispersion_etapes_lecture` | Dispersion par étape | `dispersion_etapes` | le cycle time global (autre échelle : par statut individuel, pas création -> résolution) |
 | `temps_par_etape_lecture` | Où passe le temps, étape par étape | `temps_par_etape` | la dispersion par statut (autre slide, autre lecture — ici le cumul, pas l'écart p10-p90) |
 | `cumul_estimation_conso_lecture` | Estimation vs consommé cumulés | `cumul_estimation_conso` | le cycle time, le burnup (autres slides, autre notion de temps) |
+| `sprint_cycle_trend_lecture` | Évolution du temps de cycle par sprint | `sprint_cycle_trend`, `sprint_cycle_time` | le lead time (`cycle_time`, création -> résolution, autre mesure) |
 
 Cas particuliers :
 
@@ -558,6 +560,12 @@ Cas particuliers :
   écart de **maille** (macro au lancement de l'Epic vs micro somme des
   tickets), jamais une anomalie de saisie en soi — ne le lire comme un
   problème que si le contexte le confirme.
+- `sprint_cycle_trend_lecture` : chaque point est rattaché au **sprint
+  d'entrée** de l'US. Un sprint avec `open > 0` (point orange) ne compte que
+  ses US déjà terminées, donc les plus rapides : sa médiane est
+  mécaniquement basse et ne doit jamais être lue comme une amélioration.
+  Ne tirer une tendance que des sprints sans US ouverte ; un sprint à faible
+  `count` (quelques US) est trop fragile pour porter une conclusion seul.
 
 ---
 
@@ -590,6 +598,7 @@ ci-dessous ne sont pas indicatifs.
 | `dispersion_etapes_lecture` | **220 caractères** | bandeau bas, pleine largeur |
 | `temps_par_etape_lecture` | **220 caractères** | bandeau bas, pleine largeur, sous le texte fixe de méthodologie |
 | `cumul_estimation_conso_lecture` | **220 caractères** | bandeau bas, pleine largeur |
+| `sprint_cycle_trend_lecture` | **200 caractères** | colonne étroite |
 
 Ces plafonds sont la **référence unique** utilisée par `scripts/check_coaching.py` —
 ne pas les recopier ailleurs (SKILL.md, autres docs) sans les faire diverger : y
