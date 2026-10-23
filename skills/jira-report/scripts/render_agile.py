@@ -1189,7 +1189,6 @@ def render_status(slide, placeholder_shape, data, template_path, page_num, total
     for name, count, _seg_x, seg_w in segments:
         label = f"{name} {count}"
         if seg_w - 24 >= _text_w_px(label):
-            external_lane = 0
             continue
         level = external_lane // 2
         required_h = tick_len + level * (label_h + 4) + label_h
@@ -1218,7 +1217,6 @@ def render_status(slide, placeholder_shape, data, template_path, page_num, total
             SH.add_text(slide, seg_x + 12, bar_y + bar_h / 2 - 20, seg_w - 24, 40,
                         label, size=Pt(11), color=_contrast_text_color(color), bold=True,
                         anchor=MSO_ANCHOR.MIDDLE)
-            external_lane = 0  # une rupture de série redémarre au-dessus
             continue
 
         cx = seg_x + seg_w / 2
@@ -1277,9 +1275,13 @@ def render_status(slide, placeholder_shape, data, template_path, page_num, total
         SH.add_rect(slide, cx + pad, cy + pad + 4, 16, 16, fill=colors[name], line_color=None)
         SH.add_text(slide, cx + pad + 26, cy + pad, card_w - pad - 26, 30, name,
                     size=Pt(12), color=S.BRAND_PRIMARY, bold=True)
-        SH.add_text(slide, cx + pad, cy + pad + 40, card_w - 2 * pad, 60, str(count),
-                    size=S.SIZE_CARD_NUMBER, color=num_color, bold=True)
-        SH.add_text(slide, cx + pad, cy + card_h - pad - 26, card_w - 2 * pad, 26,
+        compact_card = card_h < 190
+        number_h = 42 if compact_card else 60
+        number_size = Pt(22) if compact_card else S.SIZE_CARD_NUMBER
+        sub_h = 24 if compact_card else 26
+        SH.add_text(slide, cx + pad, cy + pad + 40, card_w - 2 * pad, number_h, str(count),
+                    size=number_size, color=num_color, bold=True)
+        SH.add_text(slide, cx + pad, cy + card_h - pad - sub_h, card_w - 2 * pad, sub_h,
                     f"{pct} % du périmètre", size=S.SIZE_CARD_LABEL, color=sub_color)
 
     SH.add_footer(slide, project_name, page_num, total_pages)
@@ -1603,9 +1605,8 @@ def render_temps_par_etape(slide, placeholder_shape, data, template_path, page_n
 
     lecture = (data.get("coaching") or {}).get("temps_par_etape_lecture", "")
     footer_text = (
-        f"Médianes calculées sur les {tpe['us_count']} tickets de la période. Elles ne "
-        f"s'additionnent pas exactement : le cumul de {_fr_num(total)} j décrit un parcours "
-        "type, pas la moyenne réelle du lead time affichée en haut."
+        f"Médianes sur {tpe['us_count']} tickets. Leur somme ({_fr_num(total)} j) décrit "
+        "un parcours type, pas le lead time moyen."
     )
 
     # ---------------------------------------------------------- budget vertical
