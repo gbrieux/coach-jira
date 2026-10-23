@@ -16,6 +16,7 @@ DEFAULT_CONF = {
     "defect_age_buckets": [1, 7, 15, 30],
     "sprint_duration_days": 21,
     "dispersion_etapes": {},
+    "debit_etapes": {},
     "ticket_filter": {},
 }
 

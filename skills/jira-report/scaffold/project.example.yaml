@@ -56,7 +56,13 @@ jql: 'project = XXX AND ...'           # la requête JIRA qui définit le périm
 #                                       # est ignoré — filtre le bruit d'automatisation JIRA (règle qui
 #                                       # transitionne un ticket en quelques secondes à sa création,
 #                                       # pas un vrai temps passé dans le statut). Défaut si absent : 300
-#                                       # (5 min).
+#                                       # (5 min). Même seuil appliqué par {{chart:temps_par_etape}}
+#                                       # et {{chart:debit_etapes}}.
+# debit_etapes:                        # config optionnelle de {{chart:debit_etapes}} :
+#   window_sprints: 3                  # nombre de derniers sprints clos sur lesquels mesurer les
+#                                       # entrées/sorties par statut (débits par sprint = total ÷ ce
+#                                       # nombre). Sans sprint clos : les window_sprints ×
+#                                       # sprint_duration_days derniers jours. Défaut si absent : 3.
 # ticket_filter:                       # optionnel : types de tickets JIRA (noms exacts) retenus par
 #                                       # chaque indicateur, filtrés en mémoire après la requête `jql`
 #                                       # (pas de requête JIRA supplémentaire). Clé = nom du placeholder
@@ -65,7 +71,8 @@ jql: 'project = XXX AND ...'           # la requête JIRA qui définit le périm
 #                                       # tickets. Clé absente = filtre par défaut de l'indicateur :
 #                                       #   - us_types (ci-dessus) pour velocity, burndown, burnup,
 #                                       #     cycle_time, sprint_spread, sprint_cycle_trend, status,
-#                                       #     cumulative_flow_diagram, temps_par_etape, dispersion_etapes ;
+#                                       #     cumulative_flow_diagram, temps_par_etape, dispersion_etapes,
+#                                       #     debit_etapes ;
 #                                       #   - tous les tickets pour types, conso_corrective,
 #                                       #     cumul_estimation_conso, tempo_conso, tempo_types,
 #                                       #     defauts_kpi, defauts_tendance, defauts_delai_origine.

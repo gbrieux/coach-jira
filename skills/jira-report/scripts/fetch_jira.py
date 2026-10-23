@@ -87,6 +87,9 @@ DEFAULTS = {
                                              # (bruit d'automatisation JIRA : transitions à la création
                                              # en quelques secondes, pas un vrai temps passé) — voir
                                              # indicators/dispersion_etapes.py
+    "debit_etapes": {},                     # config optionnelle de {{chart:debit_etapes}} :
+                                             # `window_sprints` (défaut 3) — nombre de derniers sprints
+                                             # clos mesurés — voir indicators/debit_etapes.py
     "ticket_filter": {},                    # {<placeholder>: [types JIRA]} par indicateur, filtre
                                              # en mémoire ; clé absente = filtre historique de
                                              # l'indicateur (us_types ou tous), liste vide = tous

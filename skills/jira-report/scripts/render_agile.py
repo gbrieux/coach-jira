@@ -1750,6 +1750,140 @@ def render_temps_par_etape(slide, placeholder_shape, data, template_path, page_n
     SH.add_footer(slide, project_name, page_num, total_pages)
 
 
+# ================================================================= debit_etapes
+def render_debit_etapes(slide, placeholder_shape, data, template_path, page_num, total_pages):
+    m = data["metrics"]
+    project_name = data["project_name"].strip()
+    SH.clear_legacy_chrome(slide)
+    SH.clear_placeholder(placeholder_shape)
+
+    de = m.get("debit_etapes")
+    if not de:
+        SH.add_header(slide, "CONFIGURATION MANQUANTE", "Débit par étape", template_path)
+        SH.add_text(slide, S.MARGIN_X, S.CONTENT_Y + 40, S.CONTENT_W, 100,
+                    "Le workflow (project.yaml, champ `workflow`) doit être configuré, et au "
+                    "moins une US doit avoir changé de statut sur la fenêtre, pour mesurer le "
+                    "débit — voir SKILL.md.",
+                    size=S.SIZE_BODY, color=S.TEXT_SECONDARY)
+        SH.add_footer(slide, project_name, page_num, total_pages)
+        return
+
+    items = de["items"]
+    acc = de["accumulation"]
+    n = de["window_sprints"]
+    if de["sprints"]:
+        surtitre = (f"{n} DERNIERS SPRINTS CLOS · {short_label(de['sprints'][0])} → "
+                    f"{short_label(de['sprints'][-1])}")
+    else:
+        surtitre = f"DU {_ddmm(_parse_iso(de['start']))} AU {_ddmm(_parse_iso(de['end']))}"
+    SH.add_header(slide, surtitre, "Débit par étape", template_path)
+
+    # ------------------------------------------------------------ graphique
+    CHART_H, STOCK_H = 585, 175
+    cats = [r["name"] for r in items]
+    cd = CategoryChartData()
+    cd.categories = cats
+    cd.add_series("Entrées / sprint", [r["entrees_par_sprint"] for r in items])
+    cd.add_series("Sorties / sprint", [r["sorties_par_sprint"] for r in items])
+    gf = slide.shapes.add_chart(XL_CHART_TYPE.COLUMN_CLUSTERED, S.px(S.MARGIN_X), S.px(S.CONTENT_Y),
+                                 S.px(CHART_W), S.px(CHART_H), cd)
+    chart = gf.chart
+    chart.has_title = False
+    x_frac, w_frac = 0.04, 0.94
+    _set_manual_plot_area(chart, x_frac, 0.03, w_frac, 0.72)
+
+    acc_idx = cats.index(acc["name"]) if acc else None
+    for series, color, acc_color in zip(
+            chart.plots[0].series, (S.BLUE_FILL_1, S.BRAND_PRIMARY), (S.ORANGE_LIGHT, S.BRAND_ACCENT)):
+        series.format.fill.solid()
+        series.format.fill.fore_color.rgb = color
+        series.format.line.fill.background()
+        if acc_idx is not None:
+            # File qui grossit : ses deux barres passent en orange — même
+            # couple clair/foncé que les deux séries, pour garder la lecture
+            # entrées/sorties sur la colonne mise en évidence.
+            pt = series.points[acc_idx]
+            pt.format.fill.solid()
+            pt.format.fill.fore_color.rgb = acc_color
+        series.data_labels.show_value = True
+        series.data_labels.number_format = "0.0"
+        series.data_labels.number_format_is_linked = False
+        series.data_labels.position = XL_LABEL_POSITION.OUTSIDE_END
+        series.data_labels.font.size = Pt(10)
+        series.data_labels.font.color.rgb = S.TEXT_PRIMARY
+    chart.plots[0].gap_width = 60
+    chart.plots[0].overlap = -5
+
+    cat_ax = chart.category_axis
+    cat_ax.format.line.color.rgb = S.CARD_BORDER
+    cat_ax.tick_labels.font.size = Pt(10.5)
+    cat_ax.tick_labels.font.color.rgb = S.TEXT_PRIMARY
+
+    val_ax = chart.value_axis
+    val_ax.has_major_gridlines = True
+    val_ax.major_gridlines.format.line.color.rgb = S.CARD_BORDER_INNER
+    val_ax.tick_labels.font.size = Pt(9.5)
+    val_ax.tick_labels.font.color.rgb = S.TEXT_FOOTER
+    val_ax.format.line.fill.background()
+
+    chart.has_legend = True
+    chart.legend.position = XL_LEGEND_POSITION.BOTTOM
+    chart.legend.include_in_layout = False
+    chart.legend.font.size = S.SIZE_LEGEND
+    chart.legend.font.color.rgb = S.TEXT_PRIMARY
+
+    # ------------------------------------------- rangée stock, alignée sur les colonnes
+    # Zone de tracé figée par _set_manual_plot_area (cible "inner") : chaque
+    # catégorie occupe une part égale de sa largeur, d'où un centre calculable.
+    stock_y = S.CONTENT_Y + CHART_H + 10
+    SH.add_rounded_rect(slide, S.MARGIN_X, stock_y, CHART_W, STOCK_H)
+    SH.add_text(slide, S.MARGIN_X + 20, stock_y + 10, CHART_W - 40, 24,
+                "Stock fin de fenêtre · évolution · sprints pour le vider · retours d'une étape aval",
+                size=S.SIZE_CARD_LABEL, color=S.TEXT_SECONDARY, bold=True, all_caps=True)
+    plot_x0 = S.MARGIN_X + CHART_W * x_frac
+    col_w = CHART_W * w_frac / len(items)
+    for i, r in enumerate(items):
+        cx = plot_x0 + col_w * i
+        is_acc = i == acc_idx
+        SH.add_text(slide, cx, stock_y + 42, col_w, 40, str(r["stock_fin"]), size=Pt(20),
+                    color=S.BRAND_ACCENT if is_acc else S.BRAND_PRIMARY, bold=True, align=PP_ALIGN.CENTER)
+        delta = r["delta_stock"]
+        delta_txt = f"{'+' if delta > 0 else ''}{delta}"
+        cov = r["couverture_sprints"]
+        cov_txt = f"{_fr_num(cov)} sprint{'s' if cov and cov >= 2 else ''}" if cov is not None else "aucune sortie"
+        SH.add_text(slide, cx, stock_y + 86, col_w, 22, delta_txt, size=Pt(11),
+                    color=S.ALERT_TEXT if delta > 0 else S.TEXT_SECONDARY, bold=delta > 0,
+                    align=PP_ALIGN.CENTER)
+        SH.add_text(slide, cx, stock_y + 110, col_w, 22, cov_txt, size=Pt(10),
+                    color=S.TEXT_SECONDARY, align=PP_ALIGN.CENTER)
+        if r["retours"]:
+            retours_txt = f"↩ {r['retours']} retour{'s' if r['retours'] > 1 else ''}"
+            SH.add_text(slide, cx, stock_y + 134, col_w, 22, retours_txt, size=Pt(10),
+                        color=S.ALERT_TEXT, align=PP_ALIGN.CENTER)
+
+    # ------------------------------------------------------------ rail droit
+    y = S.CONTENT_Y
+    ALERT_H, STAT_H, GAP = 250, 174, 20
+    if acc:
+        aval = f"Goulot probable : l'étape aval, « {acc['etape_aval']} »." if acc["etape_aval"] else ""
+        _card_alert(slide, RAIL_X, y, RAIL_W, ALERT_H, "FILE QUI GROSSIT", acc["name"],
+                    f"+{acc['delta_stock']} US en stock sur la fenêtre. {aval}")
+    else:
+        _card_stat(slide, RAIL_X, y, RAIL_W, ALERT_H, "ACCUMULATION", "Aucune",
+                   "aucun stock n'augmente sur la fenêtre")
+    y += ALERT_H + GAP
+    # Libellé sur 2 lignes -> grand nombre compact (24 pt) : « 10,7 → 11,7 »
+    # ne tient pas sur une ligne du rail à 30 pt (retour QA).
+    _card_stat(slide, RAIL_X, y, RAIL_W, STAT_H, "ARRIVÉES → LIVRÉES PAR SPRINT",
+               f"{_fr_num(de['arrivees_par_sprint'])} → {_fr_num(de['livrees_par_sprint'])}",
+               "US, moyenne sur la fenêtre", label_lines=2)
+    y += STAT_H + GAP
+    lecture = (data.get("coaching") or {}).get("debit_etapes_lecture", "")
+    _card_lecture(slide, RAIL_X, y, RAIL_W, S.CONTENT_H - ALERT_H - STAT_H - 2 * GAP, lecture)
+
+    SH.add_footer(slide, project_name, page_num, total_pages)
+
+
 def _age_severity_palette(n):
     """Dégradé rose pâle (tranche la plus récente) -> rouge (la plus
     ancienne), pour les tranches d'ancienneté du backlog Défauts (voir

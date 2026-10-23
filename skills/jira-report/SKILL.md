@@ -220,6 +220,7 @@ indicateur »).
 | Évolution du temps de cycle par sprint (US) | `{{chart:sprint_cycle_trend}}` | P15 / médiane / P85 du temps de cycle (même mesure que l'encart de `{{chart:sprint_spread}}` : entrée en sprint -> 1er `done_statuses`) par **sprint d'entrée**. Point orange = sprint avec des US entrées pas encore terminées (valeur biaisée vers le bas). Légende coach `sprint_cycle_trend_lecture`. |
 | Dispersion par étape (US) | `{{chart:dispersion_etapes}}` | Boîtes à moustaches (p10/p25/médiane/p75/p90, en jours) du temps passé par statut du `workflow` configuré — reconstruit via changelog (`indicators.common.status_timeline`, partagé avec `{{chart:cumulative_flow_diagram}}`). Seuls les intervalles clos (statut réellement quitté) sont mesurés, et seulement ceux d'au moins `dispersion_etapes.min_transition_seconds` (project.yaml, défaut 300s = 5 min) — filtre les transitions quasi instantanées (automatisation JIRA à la création, pas un vrai temps passé, voir Historique). Les statuts terminaux (`done_statuses`, même champ que `{{chart:cycle_time}}`) sont **toujours exclus**, même s'ils ont des échantillons (ticket réouvert puis re-sorti) — le temps passé dans un statut terminal n'a pas de lecture agile utile. Couleur par statut = couleur de **groupe** `cfd.groups` (même config, mêmes couleurs que le CFD — `render_agile._cfd_palette`), jamais une palette propre à cette slide ; `cfd.groups` absent -> repli un groupe par statut (dégradé, comme le CFD sans regroupement). Échelle de l'axe dérivée du **p75 maximum** (pas du p90) — la boîte p25-p75 tient donc toujours entière ; une moustache p90 qui dépasse est coupée au bord (flèche + valeur réelle affichée juste après, sur la même ligne), plutôt que d'étirer l'axe entier sur un seul outlier (voir Historique). Valeur médiane affichée sous la boîte, centrée sur le trait médian. Nécessite `workflow` non vide (sinon absent, comme le CFD). |
 | Où passe le temps, étape par étape (US) | `{{chart:temps_par_etape}}` | Même mesure de base que `{{chart:dispersion_etapes}}` (intervalles clos, seuil `min_transition_seconds`, statuts terminaux exclus — calcul partagé via `indicators.common.status_durations`) mais réduite à la **médiane** par statut, cumulée dans l'ordre du `workflow` pour reconstituer un parcours type de la création à la livraison. Deux barres empilées alignées sur le même axe cumulatif : une barre macro par groupe `cfd.groups` (couleurs identiques au CFD) et une barre détaillée par statut (teintes dégradées au sein du groupe). Sous les barres, une carte par statut (numérotée, médiane + « N passages mesurés » — **pas** « N tickets » : un ticket qui repasse par le même statut lors d'un aller-retour dans le workflow y contribue un échantillon par visite, voir Historique) regroupée par section `cfd.groups`. Texte fixe de méthodologie sous le titre (pas une légende coach) et rappel en pied de slide que les médianes ne s'additionnent pas exactement. `cfd.groups` absent -> repli un groupe par statut, comme le CFD. Nécessite `workflow` non vide. |
+| Débit par étape (US) | `{{chart:debit_etapes}}` | Sur les `debit_etapes.window_sprints` derniers sprints **clos** (défaut 3, sprint actif exclu ; sans sprint clos : les `window_sprints × sprint_duration_days` derniers jours), par statut du `workflow` : entrées et sorties **par sprint** (colonnes groupées), puis sous chaque colonne le stock en fin de fenêtre, son évolution, la couverture (stock ÷ sorties par sprint = sprints pour le vider) et les **retours** (entrées venant d'un statut plus avancé = retravail). Le statut dont le stock a le plus augmenté est mis en évidence (orange) ; le rail l'annonce avec l'étape **aval** comme goulot probable, plus arrivées -> livrées par sprint. Même reconstruction par changelog et même seuil de bruit que `{{chart:dispersion_etapes}}` (`min_transition_seconds` : une visite plus courte est ignorée, ses voisines fusionnées) ; statuts terminaux exclus des colonnes, comptés en « livrées ». Nécessite `workflow` non vide. |
 | Tableau des sprints (US) | `{{liste_sprints}}` | table native : ajouts/terminés par sprint, cumuls (nb + jh) |
 | Tableau des epics | `{{liste_epics}}` | table native : par epic, Estim. EPIC initiale (`timeoriginalestimate` de l'Epic lui-même, détail des enfants dans `detail_estimate_jh`), Conso (tickets rattachés, directement ou via leur parent : sous-tâche -> US -> Epic), RAF théo ; ligne « Sans EPIC » toujours affichée. Totaux alignés sur `{{chart:cumul_estimation_conso}}` (même population `ticket_filter.cumul_estimation_conso`) ; avancement/projection sur toutes les US du périmètre ; bandeau légende (`coaching.epics_lecture`, optionnel) sous le tableau — tableau à hauteur réduite quand présent, hauteur d'origine sinon (jamais de trou) |
 | KPI cycle time | `{{kpi:*}}` | cartes de synthèse cycle time (voir placeholders texte ci-dessous) |
@@ -353,6 +354,31 @@ ou, sur poste Windows local, `pywin32` + `scripts/render_slides_windows.py` (voi
 racine du skill.
 
 ## Historique / suivi
+
+- 2026-10-23 — Nouvelle slide **`{{chart:debit_etapes}}`** (« Débit par étape »,
+  demande explicite : voir le goulot d'étranglement du workflow). Question de
+  départ : le CFD ne donne le débit qu'entre 3 groupes, pas statut par statut.
+  Calcul (`indicators/debit_etapes.py`) : entrées/sorties par statut sur les
+  `debit_etapes.window_sprints` derniers sprints clos (nouveau champ
+  `project.yaml`, défaut 3), stock début/fin, couverture (stock ÷ sorties par
+  sprint) et **retours** (entrées depuis un statut plus avancé). Choix tranchés
+  en session :
+  - le statut mis en évidence est la **file qui grossit** (plus forte hausse de
+    stock), le goulot annoncé est l'étape **aval** — pas la file elle-même ;
+  - même seuil de bruit que `dispersion_etapes` (`min_transition_seconds`) :
+    une visite plus courte est retirée et ses voisines identiques fusionnées,
+    sinon un aller-retour automatique crée une fausse sortie/réentrée ;
+  - sprint actif exclu de la fenêtre (partiel, COACH_PROMPT.md §1.5).
+  Rendu (`render_agile.render_debit_etapes`) : colonnes groupées
+  entrées/sorties par sprint, rangée stock/évolution/couverture/retours
+  alignée sur les colonnes, rail (file qui grossit + étape aval, arrivées ->
+  livrées par sprint, lecture coach `debit_etapes_lecture`, 200 car.). Insérée
+  juste après `{{chart:temps_par_etape}}` dans les deux `template.pptx`. QA
+  réelle sur NOS (S24 -> S26) : « À faire » passe de 13 à 38 US (16 entrées
+  pour 7,7 sorties par sprint), et 16 des 40 entrées en « En cours » sont des
+  retours. Retour QA intégré : libellé de la carte d'alerte raccourci (« File
+  qui grossit ») et carte arrivées/livrées en grand nombre compact, qui
+  passaient sur 2 lignes.
 
 - 2026-10-02 — `{{liste_epics}}` aligné sur `{{chart:cumul_estimation_conso}}`
   (demande explicite, NOS : 1 182 jh « estimé Epics » d'un côté, 1 330 jh

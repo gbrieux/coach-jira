@@ -40,6 +40,7 @@ MAX_LEN = {
     "defauts_delai_origine_lecture": 220,
     "dispersion_etapes_lecture": 220,
     "temps_par_etape_lecture": 220,
+    "debit_etapes_lecture": 200,
     "cumul_estimation_conso_lecture": 220,
     "sprint_cycle_trend_lecture": 200,
 }
