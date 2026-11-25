@@ -10,7 +10,7 @@ from datetime import datetime as _datetime
 import render_agile
 from indicators.common import (
     BACKLOG_KEY, FORECAST_MAX_HORIZON, filter_issues, parse_dt, percentile, sprint_date_bucket,
-    sprint_label, sprint_names, to_float,
+    sprint_label, to_float,
 )
 
 RENDERERS = {

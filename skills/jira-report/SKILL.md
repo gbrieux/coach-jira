@@ -157,7 +157,7 @@ Voir `scaffold/project.example.yaml` pour la liste complète des champs
 
 - `contexte/organisation.md` — contexte transverse, toujours lu.
 - `contexte/<team_id>.md` — un fichier par équipe (une équipe peut porter plusieurs
-  projets, ex. `NOS_R1` et `NOS_R2` peuvent partager `team_id: "NOS"`).
+  projets, ex. `PRJ_R1` et `PRJ_R2` peuvent partager `team_id: "PRJ"`).
 
 `team_id` est la valeur exacte du champ dans `projects/<clé>/project.yaml` —
 sensible à la casse, jamais devinée à partir du nom du projet. Résolution et
@@ -302,9 +302,9 @@ Fichier :
 python /mnt/skills/public/pptx/scripts/office/validate.py "<data>/projects/<clé>/output/<AAAAMMJJ>-<clé>-indicateurs.pptx" --original "<data>/templates/template.pptx"
 ```
 
-Placeholders restants (aucun ne doit subsister) :
+Placeholders restants (aucun ne doit subsister) — même script qu'en local :
 ```bash
-markitdown "<data>/projects/<clé>/output/<AAAAMMJJ>-<clé>-indicateurs.pptx" | grep -oE "\{\{[^}]+\}\}" && echo "PLACEHOLDERS RESTANTS" || echo "OK"
+python scripts/qa_placeholders.py <clé>
 ```
 
 Visuel : convertir en images et inspecter (overflow, charts vides, alignement) :
@@ -316,24 +316,10 @@ pdftoppm -jpeg -r 150 "<data>/projects/<clé>/output/<AAAAMMJJ>-<clé>-indicateu
 **Poste local Windows (pas de `soffice`/`pdftoppm`/`markitdown`) :**
 
 Placeholders restants — via `python-pptx`, en lisant chaque zone de texte et
-cellule de tableau plutôt que la sortie `markitdown` (indisponible) :
+cellule de tableau plutôt que la sortie `markitdown` (indisponible) ; prend le
+dernier PPT du projet (ou un chemin `.pptx` explicite), sortie 1 s'il en reste :
 ```bash
-python -c "
-from pptx import Presentation
-import re
-pat = re.compile(r'\{\{[^}]+\}\}')
-prs = Presentation('<data>/projects/<clé>/output/<AAAAMMJJ>-<clé>-indicateurs.pptx')
-found = []
-for i, slide in enumerate(prs.slides, 1):
-    for shape in slide.shapes:
-        if shape.has_text_frame:
-            found += [(i, m) for m in pat.findall(shape.text_frame.text)]
-        if shape.has_table:
-            for row in shape.table.rows:
-                for cell in row.cells:
-                    found += [(i, m) for m in pat.findall(cell.text)]
-print('PLACEHOLDERS RESTANTS' if found else 'OK', found)
-"
+python scripts/qa_placeholders.py <clé>
 ```
 
 Visuel — via automation PowerPoint (`pywin32`, PowerPoint installé requis) :
@@ -355,6 +341,20 @@ racine du skill.
 
 ## Historique / suivi
 
+- 2026-11-19 — Nettoyage des doublons et valeurs en dur (aucun changement de
+  rendu ni de calcul) : défauts `project.yaml` en source unique
+  (`indicators/defaults.py`, importé par `fetch_jira.py` et
+  `tests/fixtures.py`) ; helpers transverses dans `scripts/util.py` (`die`,
+  regex des placeholders) ; heuristique d'encodage partagée
+  (`check_coaching.encoding_damage`, utilisée par `set_coaching.py`,
+  `build_ppt.py`, `append_context.py`) ; chemins du répertoire de données
+  centralisés dans `workspace.py` (`data_json_path`, `report_path`,
+  `latest_report`, `contexte_dir`…) ; couleurs hexadécimales et `RGBColor` en
+  dur de `render_agile.py` remplacées par des constantes `style.py` ;
+  `scripts/qa_placeholders.py` (ex-`qa_placeholders_temp.py`) remplace le bloc
+  Python recopié dans la section QA ; code mort supprimé
+  (`build_ppt.sprint_table_rows`) ; clés projet/ticket réelles retirées du
+  skill.
 - 2026-10-23 — Nouvelle slide **`{{chart:debit_etapes}}`** (« Débit par étape »,
   demande explicite : voir le goulot d'étranglement du workflow). Question de
   départ : le CFD ne donne le débit qu'entre 3 groupes, pas statut par statut.
@@ -374,14 +374,14 @@ racine du skill.
   alignée sur les colonnes, rail (file qui grossit + étape aval, arrivées ->
   livrées par sprint, lecture coach `debit_etapes_lecture`, 200 car.). Insérée
   juste après `{{chart:temps_par_etape}}` dans les deux `template.pptx`. QA
-  réelle sur NOS (S24 -> S26) : « À faire » passe de 13 à 38 US (16 entrées
+  réelle sur un projet (3 sprints) : « À faire » passe de 13 à 38 US (16 entrées
   pour 7,7 sorties par sprint), et 16 des 40 entrées en « En cours » sont des
   retours. Retour QA intégré : libellé de la carte d'alerte raccourci (« File
   qui grossit ») et carte arrivées/livrées en grand nombre compact, qui
   passaient sur 2 lignes.
 
 - 2026-10-02 — `{{liste_epics}}` aligné sur `{{chart:cumul_estimation_conso}}`
-  (demande explicite, NOS : 1 182 jh « estimé Epics » d'un côté, 1 330 jh
+  (demande explicite, projet réel : 1 182 jh « estimé Epics » d'un côté, 1 330 jh
   « Estim. » de l'autre, jugé confusant). Choix tranchés en session :
   - **Estim. EPIC initiale** par ligne = estimation portée par l'Epic
     elle-même (plus le rollup de ses enfants, conservé en
@@ -401,7 +401,7 @@ racine du skill.
   filtres de type codés en dur (`us_types` ou aucun) par une liste
   paramétrable par placeholder, filtrée en mémoire (choix explicite : pas une
   requête JQL par indicateur). Clé absente = comportement antérieur à
-  l'identique (vérifié sur NOA et NOS : `build_metrics` ancien vs nouveau code,
+  l'identique (vérifié sur deux projets réels : `build_metrics` ancien vs nouveau code,
   même JSON). Liste vide = tous les tickets. Sur `conso_corrective`/`defauts_*`,
   restriction d'entrée seulement, classement inchangé. `tempo_types` avec
   filtre écarte les worklogs des tickets exclus (au lieu de les ranger en
@@ -409,7 +409,7 @@ racine du skill.
   terminées » suivent `ticket_filter.burnup`. `common.status_durations` ne
   prend plus `us_types` (l'appelant passe des tickets déjà filtrés).
 - Nom du PPT généré : la clé projet s'insère après la date,
-  `<AAAAMMJJ>-<clé>-indicateurs.pptx` (ex. `20260930-NOS_R2.1-indicateurs.pptx`)
+  `<AAAAMMJJ>-<clé>-indicateurs.pptx` (ex. `20260930-PRJ_R2.1-indicateurs.pptx`)
   — demande explicite, pour distinguer les fichiers une fois sortis de leur
   dossier `projects/<clé>/output/`. Les anciens `<AAAAMMJJ>-indicateurs.pptx`
   restent en place (jamais renommés) ; `render_slides_windows.py` trie sur le
@@ -442,7 +442,7 @@ racine du skill.
   Aucun nouveau champ `project.yaml` (réutilise `seconds_per_day`) ; « Epic »
   reste un type fixe, jamais paramétrable, comme dans `build_epics`. Insérée
   juste après `{{chart:cumulative_flow_diagram}}` dans les deux
-  `template.pptx`. QA réelle sur NOS : `fetch_jira.py`/`build_ppt.py` OK, 579
+  `template.pptx`. QA réelle sur un projet : `fetch_jira.py`/`build_ppt.py` OK, 579
   jours affichés (17/02/2025 -> aujourd'hui), écart estimé Epics/détail et
   écart conso/estimé cohérents avec `data.json`.
 
@@ -453,8 +453,8 @@ racine du skill.
   aucune fusion, aucune perte, un ticket qui repasse par un statut y ajoute un
   échantillon par passage. Mais la carte affichait « sur N tickets qui y passent »
   alors que N (`items[].count`) compte des **passages**, pas des tickets distincts —
-  diagnostic réel sur NOS : « En cours » comptait 297 passages pour seulement 234
-  tickets distincts (63 tickets y étaient repassés au moins une fois, ex. LMO-3009
+  diagnostic réel sur un projet : « En cours » comptait 297 passages pour seulement 234
+  tickets distincts (63 tickets y étaient repassés au moins une fois, dont certains
   deux fois). Corrigé en « N passages mesurés » (`render_agile.render_temps_par_etape`).
   `us_count` (pied de slide), lui, était déjà un vrai compte de tickets distincts —
   resté inchangé. Tests ajoutés dans les deux indicateurs
@@ -541,7 +541,7 @@ racine du skill.
   **exclus explicitement** de la slide, pas seulement absents faute
   d'échantillon : un ticket réouvert (repasse par un statut terminé puis en
   ressort) produit bien des intervalles clos mesurables, vus en réel sur le
-  projet NOS (11 US) — exclus quand même, le temps passé dans un statut
+  projet réel (11 US) — exclus quand même, le temps passé dans un statut
   terminal n'ayant pas de lecture agile utile (retour explicite après la
   1re QA réelle, où « Terminé(e) » apparaissait sur la slide). Couleur par
   statut = couleur de **groupe** `cfd.groups`
@@ -560,7 +560,7 @@ racine du skill.
   `project.yaml` nécessaire (réutilise `workflow`/`cfd.groups`, déjà
   récupérés par le fetch existant), donc rien à re-fetcher pour valider le
   rendu.
-  **Piège vécu, corrigé après coup sur de vraies données (projet NOS)** :
+  **Piège vécu, corrigé après coup sur de vraies données (projet réel)** :
   l'échelle de l'axe calée sur `max(p90)` de tous les statuts (comme
   `render_defauts_delai_origine`, qui ne compare que 2-3 catégories) explose
   dès qu'un seul statut a un p90 très étiré — vu en réel, « Bac à sable »
@@ -580,7 +580,7 @@ racine du skill.
   backlog du graphique, échelle logarithmique, ne rien changer) — retenu
   pour garder toutes les étapes visibles sur une échelle linéaire lisible,
   sans perdre l'information du p90 réel.
-  **2e piège vécu, même QA réelle (NOS)** : une médiane « Bac à sable » à
+  **2e piège vécu, même QA réelle** : une médiane « Bac à sable » à
   0,3 j puis « Affinage métier » à 0 j (exactement) ont semblé suspects à
   l'utilisateur — diagnostic ponctuel en interrogeant JIRA en direct (lecture
   seule, script jetable, `data.json` ne stocke que les métriques agrégées,
@@ -855,7 +855,7 @@ racine du skill.
   colonnes), calculé dans `indicators/sprint_spread.py` (`sprint_cycle_time`).
   Début = plus tardif de la 1re affectation à un sprint (changelog, champ
   Sprint ; à défaut la création) et du début du 1er sprint de l'US ; fin =
-  1re transition vers un `done_statuses` (NOS : « Attente livraison recette
+  1re transition vers un `done_statuses` (ex. « Attente livraison recette
   métier »), à défaut `resolutiondate`. Toutes les US terminées, y compris
   multi-sprints. Distinct de `cycle_time` (création -> résolution, affiché
   « lead time »). Aucun nouveau champ `project.yaml`, aucune slide ajoutée.

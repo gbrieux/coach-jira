@@ -10,8 +10,6 @@ Placeholders graphiques {{chart:xxx}} remplacés par des graphiques natifs.
 """
 import argparse
 import json
-import re
-import sys
 from datetime import datetime
 
 import indicators
@@ -19,10 +17,10 @@ import render_agile
 from pptx import Presentation
 from pptx.oxml.ns import qn
 
-from workspace import output_dir, template_path, list_project_keys, DataDirNotConfigured
+from check_coaching import encoding_damage
+from util import CHART_PLACEHOLDER_RE as CHART_PH, PLACEHOLDER_RE as PLACEHOLDER, die
+from workspace import data_json_path, report_path, template_path, list_project_keys, DataDirNotConfigured
 
-PLACEHOLDER = re.compile(r"\{\{[^}]+\}\}")
-CHART_PH = re.compile(r"\{\{chart:(\w+)\}\}")
 TABLE_PH = "{{liste_sprints}}"
 EPICS_PH = "{{liste_epics}}"
 COACH_PH = "{{coach:synthese}}"
@@ -36,38 +34,12 @@ AGILE_CHART_RENDERERS = {}
 for _module in indicators.all_modules():
     AGILE_CHART_RENDERERS.update(getattr(_module, "RENDERERS", {}))
 
-SPRINT_TABLE_HEADERS = [
-    "Sprint", "Num sprint", "Date début", "Date fin",
-    "Nb de US terminées", "US terminées cumulées",
-    "Nb de US ajoutées", "Périmètre cumulé US (nb)",
-    "Estimation US", "Périmètre cumulé US (jh)",
-    "Conso US terminées", "Conso cumulée US (jh)",
-]
-
-
-def die(msg):
-    print(f"ERREUR: {msg}", file=sys.stderr)
-    sys.exit(1)
-
 
 def load_data(key):
-    p = output_dir(key) / "data.json"
+    p = data_json_path(key)
     if not p.exists():
         die(f"{p} manquant. Lancer d'abord: python scripts/fetch_jira.py {key}")
     return json.loads(p.read_text(encoding="utf-8"))
-
-
-def _iter_text_values(value):
-    """Parcourt récursivement les chaînes d'une structure JSON."""
-    if isinstance(value, str):
-        yield value
-    elif isinstance(value, dict):
-        for key, item in value.items():
-            yield from _iter_text_values(key)
-            yield from _iter_text_values(item)
-    elif isinstance(value, list):
-        for item in value:
-            yield from _iter_text_values(item)
 
 
 def validate_coaching_encoding(data, key):
@@ -82,59 +54,15 @@ def validate_coaching_encoding(data, key):
     if not coaching:
         return
 
-    texts = list(_iter_text_values(coaching))
-    replacement_chars = sum(text.count("\ufffd") for text in texts)
-    question_marks = sum(text.count("?") for text in texts)
-    embedded_question_mark = any(
-        re.search(r"[^\W\d_]\?[^\W\d_]", text, re.UNICODE) for text in texts
-    )
-
-    if replacement_chars or embedded_question_mark or question_marks > 3:
+    damage = encoding_damage(coaching)
+    if damage:
+        question_marks, replacement_chars = damage
         die(
             f"[{key}] texte de coaching probablement corrompu par l'encodage "
             f"({question_marks} caractère(s) '?' et {replacement_chars} caractère(s) de remplacement). "
             "Réinjecter le coaching avec scripts/set_coaching.py depuis un fichier JSON UTF-8. "
             "Sous Windows PowerShell, ne pas utiliser un here-string accentué avec '| python -'."
         )
-
-
-def short_sprint(name):
-    """'Nouvelle Offre Santé Sprint 12' -> 'S12' pour des axes lisibles."""
-    m = re.search(r"(\d+)\s*$", name or "")
-    return f"S{m.group(1)}" if m else (name or "")[:10]
-
-
-def format_date(iso):
-    if not iso:
-        return ""
-    try:
-        return datetime.fromisoformat(str(iso).replace("Z", "+00:00")).strftime("%d/%m/%Y")
-    except ValueError:
-        return ""
-
-
-def sprint_table_rows(data):
-    """Une ligne par sprint (dont le Sprint 0 = backlog) ayant eu de
-    l'activité côté User Story (ajout ou clôture)."""
-    rows = []
-    for b in data["metrics"].get("sprint_table", []):
-        if not (b.get("added_us") or b.get("done_us")):
-            continue
-        rows.append([
-            short_sprint(b["sprint"]),
-            b.get("num") if b.get("num") is not None else "",
-            format_date(b.get("start")),
-            format_date(b.get("end")),
-            b.get("done_us", 0),
-            b.get("done_cumul_us", 0),
-            b.get("added_us", 0),
-            b.get("scope_cumul_us", 0),
-            b.get("estimate_us_jh", 0),
-            b.get("scope_cumul_us_jh", 0),
-            b.get("conso_us_jh", 0),
-            b.get("conso_cumul_us_jh", 0),
-        ])
-    return rows
 
 
 def text_map(data):
@@ -291,9 +219,9 @@ def process(key):
     # (`generated_at`), pas de la date du build : rebuilder le PPT sans
     # relancer fetch_jira.py écrase le même fichier plutôt que d'en semer un
     # nouveau à chaque essai de mise en forme. La clé projet suit la date pour
-    # distinguer les fichiers une fois sortis de leur dossier (NOS, NOS_R2.1…).
+    # distinguer les fichiers une fois sortis de leur dossier (PRJ, PRJ_R2.1…).
     date_prefix = datetime.fromisoformat(data["generated_at"]).strftime("%Y%m%d")
-    out = output_dir(key) / f"{date_prefix}-{key}-indicateurs.pptx"
+    out = report_path(key, date_prefix)
     prs.save(str(out))
     print(f"[{key}] écrit {out}  (slides: {', '.join(placed) or 'aucune'})")
 

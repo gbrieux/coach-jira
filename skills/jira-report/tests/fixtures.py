@@ -1,30 +1,20 @@
 """Constructeurs minimalistes d'issues/sprints JIRA synthétiques pour les
 tests des modules indicators/*.py — pas les JSON réels de projects/*/output/
 (ce sont des sorties de compute(), pas des entrées)."""
+import copy
 
-DEFAULT_CONF = {
-    "sprint_field": "customfield_10020",
-    "story_points_field": "customfield_10016",
-    "seconds_per_day": 28800,
-    "done_statuses": ["Done", "Terminé", "Terminé(e)", "Closed", "Resolved", "Fermé(e)"],
-    "us_types": ["User Story", "Story"],
-    "anomaly_types": [],
-    "incident_types": [],
-    "tech_types": [],
-    "subtask_types": [],
-    "work_types": [],
-    "defect_age_buckets": [1, 7, 15, 30],
-    "sprint_duration_days": 21,
-    "dispersion_etapes": {},
-    "debit_etapes": {},
-    "ticket_filter": {},
-}
+from indicators.defaults import DEFAULTS, SPRINT_FIELD, STORY_POINTS_FIELD
+
+
+# Source unique : indicators/defaults.py (même dict que fetch_jira.py fusionne
+# sous project.yaml) — copie profonde pour qu'un test ne mute pas les défauts.
+DEFAULT_CONF = copy.deepcopy(DEFAULTS)
 
 
 def make_issue(key, itype="User Story", status="Terminé(e)", status_id=None, created=None,
                 resolutiondate=None, sprints=None, sp=None,
                 timeoriginalestimate=None, timespent=None,
-                sprint_field="customfield_10020", story_points_field="customfield_10016",
+                sprint_field=SPRINT_FIELD, story_points_field=STORY_POINTS_FIELD,
                 status_history=None, id=None, components=None, parent=None):
     """`status_history` (pour cumulative_flow_diagram.py) : liste de
     (date_iso, from_status, to_status) — un changelog JIRA minimal

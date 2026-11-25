@@ -1,15 +1,16 @@
 import json
 
 import coaching_history as ch
+from workspace import ENV_VAR, data_json_path, output_dir
 
 
 def _setup_project(tmp_path, monkeypatch, coaching=None, generated_at="2026-01-01T00:00:00Z"):
-    out_dir = tmp_path / "output"
-    out_dir.mkdir(exist_ok=True)
+    # Répertoire de données jetable (workspace.data_root lit REPORT_DATA_HOME
+    # en priorité) — passe par les vrais helpers de chemins de workspace.py.
+    monkeypatch.setenv(ENV_VAR, str(tmp_path))
     data = {"generated_at": generated_at, "coaching": coaching}
-    (out_dir / "data.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-    monkeypatch.setattr(ch, "output_dir", lambda key: out_dir)
-    return out_dir
+    data_json_path("KEY").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    return output_dir("KEY")
 
 
 def test_archive_without_coaching_is_noop(tmp_path, monkeypatch):
@@ -46,9 +47,8 @@ def test_archive_appends_when_coaching_changes(tmp_path, monkeypatch):
 
 
 def test_archive_purges_beyond_max_entries(tmp_path, monkeypatch):
-    out_dir = tmp_path / "output"
-    out_dir.mkdir()
-    monkeypatch.setattr(ch, "output_dir", lambda key: out_dir)
+    monkeypatch.setenv(ENV_VAR, str(tmp_path))
+    out_dir = output_dir("KEY")
     for i in range(ch.MAX_ENTRIES + 5):
         data = {"generated_at": f"2026-01-{i + 1:02d}T00:00:00Z", "coaching": {"vue_ensemble": f"v{i}"}}
         (out_dir / "data.json").write_text(json.dumps(data), encoding="utf-8")
@@ -69,9 +69,7 @@ def test_read_history_tolerates_missing_file(tmp_path):
 
 
 def test_last_with_no_history_does_not_raise(tmp_path, monkeypatch, capsys):
-    out_dir = tmp_path / "output"
-    out_dir.mkdir()
-    monkeypatch.setattr(ch, "output_dir", lambda key: out_dir)
+    monkeypatch.setenv(ENV_VAR, str(tmp_path))
     ch.cmd_last("KEY")
     captured = capsys.readouterr()
     assert "aucun historique" in captured.out

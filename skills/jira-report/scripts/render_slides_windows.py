@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Rendu visuel des slides PPT en JPEG, via automation PowerPoint (Windows uniquement).
 
-Alternative locale à /mnt/skills/public/pptx/scripts/office/soffice.py +
-pdftoppm (indisponibles hors sandbox cloud) : pilote l'application PowerPoint
-installée sur le poste pour exporter chaque slide en JPEG, sans dépendance
-externe. Nécessite `pywin32` (pip install pywin32) et Microsoft PowerPoint
+Alternative locale à soffice + pdftoppm (indisponibles hors sandbox cloud,
+voir SKILL.md, section « QA ») : pilote l'application PowerPoint installée
+sur le poste pour exporter chaque slide en JPEG, sans dépendance externe. Nécessite `pywin32` (pip install pywin32) et Microsoft PowerPoint
 installés sur le poste.
 
 Usage:
@@ -16,10 +15,10 @@ Usage:
 import argparse
 import re
 import shutil
-import sys
 from pathlib import Path
 
-from workspace import output_dir, DataDirNotConfigured
+from util import die
+from workspace import latest_report, output_dir, DataDirNotConfigured
 
 PP_SAVE_AS_JPG = 17  # PpSaveAsFileType.ppSaveAsJPG
 
@@ -47,20 +46,11 @@ def main():
 
     try:
         out = output_dir(args.project_key)
+        pptx_path = latest_report(args.project_key)
     except DataDirNotConfigured as e:
-        print(f"ERREUR: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    # Nom daté (YYYYMMDD-<clé>-indicateurs.pptx, voir build_ppt.py ; ancien
-    # format YYYYMMDD-indicateurs.pptx encore présent dans certains dossiers) —
-    # plusieurs fichiers peuvent coexister : tri sur le préfixe date, puis sur
-    # la date de modification pour départager deux formats du même jour.
-    candidates = sorted(out.glob("*-indicateurs.pptx"),
-                        key=lambda p: (p.name[:8], p.stat().st_mtime), reverse=True)
-    if not candidates:
-        print(f"ERREUR: aucun *-indicateurs.pptx dans {out} — lancer build_ppt.py d'abord.", file=sys.stderr)
-        sys.exit(1)
-    pptx_path = candidates[0]
+        die(str(e))
+    if pptx_path is None:
+        die(f"aucun *-indicateurs.pptx dans {out} — lancer build_ppt.py d'abord.")
 
     dest_dir = out / "slides"
     render(pptx_path, dest_dir)

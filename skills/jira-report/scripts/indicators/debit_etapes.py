@@ -45,6 +45,7 @@ from datetime import datetime as _datetime
 
 import render_agile
 from indicators.common import filter_issues, parse_dt, resolve_status_names, status_group_map, status_timeline
+from indicators.defaults import DEBIT_WINDOW_SPRINTS, min_transition_seconds
 
 RENDERERS = {"debit_etapes": render_agile.render_debit_etapes}
 
@@ -89,8 +90,8 @@ def compute(issues, sprints, conf):
     done_statuses = set(conf["done_statuses"])
     groups = (conf.get("cfd") or {}).get("groups")
     group_labels, name_to_group = status_group_map(workflow, groups)
-    min_transition_s = (conf.get("dispersion_etapes") or {}).get("min_transition_seconds", 300)
-    n = max(int((conf.get("debit_etapes") or {}).get("window_sprints", 3)), 1)
+    min_transition_s = min_transition_seconds(conf)
+    n = max(int((conf.get("debit_etapes") or {}).get("window_sprints", DEBIT_WINDOW_SPRINTS)), 1)
 
     start, end, sprint_labels = _window(sprints, conf, n)
     if start is None or end is None or start >= end:

@@ -4,15 +4,13 @@
 Usage: python scripts/inspect_template.py [chemin_template.pptx]
 Sans argument, inspecte templates/template.pptx dans le répertoire de données.
 """
-import re
 import sys
 from pathlib import Path
 
 from pptx import Presentation
 
+from util import PLACEHOLDER_RE as PLACEHOLDER
 from workspace import template_path, DataDirNotConfigured
-
-PLACEHOLDER = re.compile(r"\{\{[^}]+\}\}")
 
 
 def main():

@@ -10,7 +10,7 @@ terminé** (`done_statuses`).
   d'une US créée directement dans un sprint) et (2) la date de début du
   premier sprint de l'US — une US ajoutée avant le démarrage du sprint
   commence au démarrage, une US ajoutée en cours de sprint à son ajout.
-- Fin = première transition vers un statut de `done_statuses` (pour NOS
+- Fin = première transition vers un statut de `done_statuses` (par exemple
   « Attente livraison recette métier », première étape terminée côté
   sprint), à défaut `resolutiondate`.
 - Toutes les US terminées comptent, y compris celles qui ont traversé

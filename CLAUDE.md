@@ -4,9 +4,10 @@
 
 - `skills/jira-report/` — le skill (code seul, générique, distribuable :
   scripts, scaffold). Aucune donnée réelle —  voir `skills/jira-report/SKILL.md`.
-- Reste de ce dépôt (répertoire de données du skill, jamais versionné *avec le
-  skill* mais bien avec ce dépôt — voir `skills/jira-report/SKILL.md`, section
-  « Répertoire de données ») — données privées de l'équipe/de l'organisation :
+- Reste de ce dépôt (répertoire de données du skill, local au poste et ignoré
+  par `.gitignore` — jamais versionné, voir `skills/jira-report/SKILL.md`,
+  section « Répertoire de données ») — données privées de l'équipe/de
+  l'organisation :
   - `projects/<clé>/project.yaml` — un dossier par projet (JQL, board Jira,
     `team_id`), sortie générée dans `projects/<clé>/output/`.
   - `contexte/` — contexte qualitatif équipe :
@@ -65,14 +66,18 @@ non testé, ou non documenté. Dans l'ordre :
    `_card_stat`, `_set_manual_plot_area`, `CategoryChartData`/`XL_CHART_TYPE`)
    plutôt que redessiner à la main.
 3. **Couleurs** — nouvelles constantes dans `style.py` uniquement (jamais de
-   `RGBColor(...)` en dur ailleurs dans le skill, voir l'en-tête de ce fichier).
-4. **Nouveaux champs `project.yaml`, s'il y en a** — trois endroits à mettre à
-   jour ensemble, sous peine de `KeyError` silencieux dans un projet qui ne
-   les définit pas ou dans les tests :
-   - valeur par défaut dans `fetch_jira.py:DEFAULTS` ;
+   `RGBColor(...)` ni de chaîne hexadécimale `"1F4E79"` en dur ailleurs dans le
+   skill, voir l'en-tête de ce fichier — les helpers XML de `render_agile.py`
+   acceptent directement une constante `S.XXX`).
+4. **Nouveaux champs `project.yaml`, s'il y en a** — deux endroits à mettre à
+   jour ensemble :
+   - valeur par défaut dans `scripts/indicators/defaults.py:DEFAULTS` (source
+     unique : `fetch_jira.py` et `tests/fixtures.py:DEFAULT_CONF` l'importent,
+     ne jamais recopier la valeur ailleurs — un sous-défaut partagé par
+     plusieurs indicateurs y devient une constante, cf.
+     `min_transition_seconds()`) ;
    - documentation commentée + exemple dans
-     `skills/jira-report/scaffold/project.example.yaml` ;
-   - même valeur par défaut dans `skills/jira-report/tests/fixtures.py:DEFAULT_CONF`.
+     `skills/jira-report/scaffold/project.example.yaml`.
 5. **Template** — une nouvelle slide `{{chart:<nom>}}` dans les DEUX
    `template.pptx` (jamais un seul) :
    ```bash

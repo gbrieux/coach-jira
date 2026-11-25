@@ -22,7 +22,7 @@ COACH_PROMPT.md §4.5).
 Un intervalle clos de moins de `min_transition_seconds` (project.yaml, bloc
 `dispersion_etapes`, défaut 300s = 5 min — partagé avec
 {{chart:temps_par_etape}}, même notion) est également exclu : diagnostic QA
-réel (projet NOS) — certains statuts amont ("Affinage métier") avaient
+réel (projet en production) — certains statuts amont ("Affinage métier") avaient
 jusqu'à 61 % de leurs intervalles sous la barre des 10 secondes (un ticket
 "entré" et "sorti" du statut à quelques secondes d'écart, signature d'une
 règle d'automatisation JIRA à la création, pas d'un vrai temps de travail),
@@ -47,7 +47,7 @@ visité plus tôt. `items[].count` est donc un nombre de **passages mesurés**,
 pas de tickets distincts : un ticket qui visite deux fois "En cours" y
 contribue deux échantillons. Le nombre de tickets distincts (toutes visites
 confondues) est `us_count`, au niveau de la réponse, pas par statut — vérifié
-en réel sur NOS : "En cours" comptait 297 passages pour 234 tickets
+en réel sur un projet : "En cours" comptait 297 passages pour 234 tickets
 distincts (63 tickets y étaient repassés au moins une fois).
 
 Couleur par statut : reprend la couleur de groupe qu'utiliserait
@@ -59,6 +59,7 @@ et render_agile._cfd_palette (couleur effective, calculée au rendu à partir
 du nombre de groupes)."""
 import render_agile
 from indicators.common import filter_issues, resolve_status_names, status_group_map, status_durations, percentile
+from indicators.defaults import min_transition_seconds
 
 RENDERERS = {"dispersion_etapes": render_agile.render_dispersion_etapes}
 
@@ -70,7 +71,7 @@ def compute(issues, sprints, conf):
     done_statuses = set(conf["done_statuses"])
     groups = (conf.get("cfd") or {}).get("groups")
     group_labels, name_to_group = status_group_map(workflow, groups)
-    min_transition_s = (conf.get("dispersion_etapes") or {}).get("min_transition_seconds", 300)
+    min_transition_s = min_transition_seconds(conf)
 
     id_to_current_name = resolve_status_names(issues)
     durations, contributors = status_durations(

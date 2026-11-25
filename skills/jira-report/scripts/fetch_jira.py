@@ -17,7 +17,6 @@ Deux sources JIRA :
 import argparse
 import json
 import os
-import sys
 from collections import defaultdict
 from datetime import timezone
 from datetime import datetime as _datetime
@@ -26,13 +25,10 @@ import requests
 from dotenv import load_dotenv
 
 import indicators
-from indicators.common import filter_issues, parse_dt, to_float
-from workspace import data_root, output_dir, list_project_keys, load_project_config, DataDirNotConfigured
-
-
-def die(msg):
-    print(f"ERREUR: {msg}", file=sys.stderr)
-    sys.exit(1)
+from indicators.common import EPIC_TYPE, filter_issues, parse_dt, to_float
+from indicators.defaults import DEFAULTS
+from workspace import data_root, data_json_path, list_project_keys, load_project_config, DataDirNotConfigured
+from util import die
 
 
 try:
@@ -52,49 +48,7 @@ TOKEN = os.environ.get("JIRA_API_TOKEN", "")
 TEMPO_TOKEN = os.environ.get("TEMPO_API_TOKEN", "")
 TEMPO_API_URL = "https://api.tempo.io/4/worklogs"
 
-# 1 jour-homme = 8h = 28800 s (paramétrable par projet via seconds_per_day)
-DEFAULTS = {
-    "sprint_field": "customfield_10020",
-    "story_points_field": "customfield_10016",
-    "seconds_per_day": 28800,
-    "done_statuses": ["Done", "Terminé", "Terminé(e)", "Closed", "Resolved", "Fermé(e)"],
-    "us_types": ["User Story", "Story"],   # types comptés comme US pour vélocité/cycle time
-    "anomaly_types": [],                    # types comptés comme "anomalie" pour {{chart:conso_corrective}}
-    "incident_types": [],                   # types comptés comme "incident" pour {{chart:conso_corrective}}
-    "tech_types": [],                       # types comptés comme "US tech" pour {{chart:conso_corrective}}
-                                             # (US techniques hors us_types, ex. Technical Story)
-    "subtask_types": [],                    # types comptés comme "Sous-tâche" pour {{chart:conso_corrective}}
-    "work_types": [],                       # types comptés comme "Travaux" pour {{chart:conso_corrective}}
-                                             # ET comme "travaux" (3e catégorie) pour
-                                             # {{chart:defauts_delai_origine}} — champ partagé entre les
-                                             # deux indicateurs, comme anomaly_types/incident_types
-    "defect_age_buckets": [1, 7, 15, 30],    # bornes (jours) des tranches d'ancienneté du backlog
-                                             # ouvert sur {{chart:defauts_tendance}} — [1,7,15,30] donne
-                                             # 5 tranches : 0-1j / 2-7j / 8-15j / 16-30j / +30j
-    "board_id": None,                       # requis pour dates/état des sprints
-    "sprint_start_date": None,              # YYYY-MM-DD ; filtre les sprints plus anciens
-    "sprint_duration_days": 21,             # durée calendaire d'un sprint, pour la projection burnup
-    "workflow": [],                         # statuts JIRA ordonnés (bac à sable -> terminé) ;
-                                             # {{chart:status}} suit cet ordre. Vide = tri par
-                                             # fréquence (comportement historique), voir status_flow.py
-    "cfd": {},                              # config optionnelle de {{chart:cumulative_flow_diagram}} :
-                                             # `groups` (regroupe des statuts de `workflow` en une
-                                             # bande, lisibilité), `start_date`/`end_date` (bornes
-                                             # affichées) — voir indicators/cumulative_flow_diagram.py
-    "dispersion_etapes": {},                # config optionnelle de {{chart:dispersion_etapes}} :
-                                             # `min_transition_seconds` (défaut 300 = 5 min) — durée
-                                             # plancher sous laquelle un intervalle clos est ignoré
-                                             # (bruit d'automatisation JIRA : transitions à la création
-                                             # en quelques secondes, pas un vrai temps passé) — voir
-                                             # indicators/dispersion_etapes.py
-    "debit_etapes": {},                     # config optionnelle de {{chart:debit_etapes}} :
-                                             # `window_sprints` (défaut 3) — nombre de derniers sprints
-                                             # clos mesurés — voir indicators/debit_etapes.py
-    "ticket_filter": {},                    # {<placeholder>: [types JIRA]} par indicateur, filtre
-                                             # en mémoire ; clé absente = filtre historique de
-                                             # l'indicateur (us_types ou tous), liste vide = tous
-                                             # les tickets — voir indicators/common.py:ticket_types
-}
+# Valeurs par défaut de project.yaml : source unique dans indicators/defaults.py.
 
 
 def session():
@@ -255,7 +209,7 @@ def build_epics(issues, conf):
         f = it["fields"]
         parent = f.get("parent")
         parent_of[it["key"]] = parent.get("key") if parent else None
-        if (f.get("issuetype") or {}).get("name") == "Epic":
+        if (f.get("issuetype") or {}).get("name") == EPIC_TYPE:
             epics_meta[it["key"]] = {
                 "key": it["key"],
                 "name": f.get("summary", ""),
@@ -281,7 +235,7 @@ def build_epics(issues, conf):
     for it in population:
         f = it["fields"]
         itype = (f.get("issuetype") or {}).get("name", "")
-        if itype == "Epic":
+        if itype == EPIC_TYPE:
             continue
         epic_key = epic_of(it["key"])
         r = rollup[epic_key] if epic_key else no_epic
@@ -471,7 +425,7 @@ def process(key, conf, s):
         "jql": conf["jql"],
         "metrics": metrics,
     }
-    p = output_dir(key) / "data.json"
+    p = data_json_path(key)
     p.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"[{key}] écrit {p}")
 

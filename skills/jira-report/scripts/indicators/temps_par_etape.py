@@ -31,6 +31,7 @@ tickets ». `us_count` (pied de slide) est, lui, bien un nombre de tickets
 distincts, mais agrégé sur tous les statuts affichés, pas par statut."""
 import render_agile
 from indicators.common import filter_issues, resolve_status_names, status_group_map, status_durations, percentile
+from indicators.defaults import min_transition_seconds
 
 RENDERERS = {"temps_par_etape": render_agile.render_temps_par_etape}
 
@@ -42,7 +43,7 @@ def compute(issues, sprints, conf):
     done_statuses = set(conf["done_statuses"])
     groups = (conf.get("cfd") or {}).get("groups")
     group_labels, name_to_group = status_group_map(workflow, groups)
-    min_transition_s = (conf.get("dispersion_etapes") or {}).get("min_transition_seconds", 300)
+    min_transition_s = min_transition_seconds(conf)
 
     id_to_current_name = resolve_status_names(issues)
     durations, contributors = status_durations(

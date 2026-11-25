@@ -84,7 +84,7 @@ def test_recommandations_wrong_type_is_error():
 
 
 def test_recette_last_generated_ppt_overflow():
-    """Cas de recette du brief : le coaching du dernier PPT généré (NOS_R2)
+    """Cas de recette du brief : le coaching du dernier PPT généré (projet réel)
     doit remonter au minimum ces quatre dépassements."""
     coaching = {
         "vue_ensemble": "x" * 493,

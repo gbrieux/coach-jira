@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 import render_agile
 from indicators.common import (
     filter_issues,
-    parse_dt, to_float, defect_category, month_key, month_range,
+    parse_dt, defect_category, month_key, month_range,
     age_bucket_labels, age_bucket_index,
 )
 

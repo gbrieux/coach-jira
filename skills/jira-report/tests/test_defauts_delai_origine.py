@@ -47,16 +47,16 @@ def test_origin_by_parent_and_no_parent():
                  sprint_start_date=now.strftime("%Y-%m-%d"))
     issues = [
         make_issue("A-1", itype="Anomalie", status="Ouvert", created=_iso(now),
-                    parent=("LMO-1", "Souscription en ligne")),
+                    parent=("PRJ-1", "Souscription en ligne")),
         make_issue("I-1", itype="Incident", status="Ouvert", created=_iso(now),
-                    parent=("LMO-1", "Souscription en ligne")),
+                    parent=("PRJ-1", "Souscription en ligne")),
         make_issue("W-1", itype="Travaux", status="Ouvert", created=_iso(now),
-                    parent=("LMO-1", "Souscription en ligne")),
+                    parent=("PRJ-1", "Souscription en ligne")),
         make_issue("A-2", itype="Anomalie", status="Ouvert", created=_iso(now)),  # pas de parent
     ]
     out = ddo.compute(issues, [], conf)["defauts_delai_origine"]
     by_key = {p["key"]: p for p in out["origin"]["parents"]}
-    assert by_key["LMO-1"] == {"key": "LMO-1", "name": "Souscription en ligne",
+    assert by_key["PRJ-1"] == {"key": "PRJ-1", "name": "Souscription en ligne",
                                 "anomalie": 1, "incident": 1, "travaux": 1}
     assert out["origin"]["no_parent"] == {"anomalie": 1, "incident": 0, "travaux": 0}
 
@@ -68,7 +68,7 @@ def test_origin_beyond_top_n_goes_to_other():
     # sortir du top 6 (ddo.TOP_N_PARENTS) et tomber dans "other".
     issues = [
         make_issue(f"A-{i}", itype="Anomalie", status="Ouvert", created=_iso(now),
-                    parent=(f"LMO-{i}", f"Parent {i}"))
+                    parent=(f"PRJ-{i}", f"Parent {i}"))
         for i in range(7)
     ]
     out = ddo.compute(issues, [], conf)["defauts_delai_origine"]

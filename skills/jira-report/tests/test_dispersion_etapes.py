@@ -170,8 +170,8 @@ def test_done_status_excluded_even_with_reopened_samples():
 
 def test_instant_transition_excluded_by_default():
     """Une transition à quelques secondes (signature d'une automatisation
-    JIRA à la création, pas un vrai temps passé — voir diagnostic réel projet
-    NOS, docstring du module) est ignorée par défaut (seuil 300s = 5 min)."""
+    JIRA à la création, pas un vrai temps passé — voir diagnostic réel
+    sur un projet, docstring du module) est ignorée par défaut (seuil 300s = 5 min)."""
     issue = make_issue(
         "KEY-1", status="En cours", created="2024-01-01T00:00:00+00:00",
         status_history=[("2024-01-01T00:00:03+00:00", "À faire", "En cours")],

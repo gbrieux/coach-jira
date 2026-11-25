@@ -43,13 +43,23 @@ TEXT_PRIMARY = RGBColor(0x33, 0x47, 0x5B)
 TEXT_SECONDARY = RGBColor(0x6B, 0x7C, 0x8C)
 TEXT_FOOTER = RGBColor(0x93, 0xA2, 0xB0)
 TEXT_WHITE = RGBColor(0xFF, 0xFF, 0xFF)
+WHITE = TEXT_WHITE
+
+# Tableaux ({{liste_sprints}}, {{liste_epics}}) : zébrage, ligne courante,
+# lignes de synthèse (« autres EPICs », « sans EPIC »).
+TABLE_ROW_BG = WHITE
+TABLE_ROW_ALT_BG = RGBColor(0xFA, 0xFC, 0xFD)
+TABLE_ROW_CURRENT_BG = RGBColor(0xF0, 0xF6, 0xFA)
+TABLE_ROW_SUMMARY_BG = CARD_BG
+# Remplissage des marqueurs de courbe (point creux cerclé de la couleur de série).
+MARKER_FILL = WHITE
 
 ALERT_BG = RGBColor(0xFE, 0xF5, 0xF2)
 ALERT_BORDER = RGBColor(0xF7, 0xC4, 0xB4)
 ALERT_TEXT = RGBColor(0xB9, 0x3A, 0x16)
 
 TREND_OPTIMIST = RGBColor(0x2E, 0x9E, 0x6B)
-TREND_MEDIAN = RGBColor(0xF0, 0x4E, 0x23)
+TREND_MEDIAN = BRAND_ACCENT
 TREND_PESSIMIST = RGBColor(0xC0, 0x39, 0x2B)
 
 # Code couleur uniforme par type de ticket JIRA — le même type a toujours la
@@ -58,8 +68,8 @@ TREND_PESSIMIST = RGBColor(0xC0, 0x39, 0x2B)
 # {{chart:tempo_types}}), jamais une palette différente par slide.
 TYPE_US = RGBColor(0x2E, 0x9E, 0x6B)        # vert
 TYPE_US_TECH = RGBColor(0xE0, 0xB0, 0x2E)   # jaune
-TYPE_SUBTASK = RGBColor(0x7F, 0xB2, 0xCE)   # bleu clair
-TYPE_EPIC = RGBColor(0x1F, 0x4E, 0x79)      # bleu foncé (brand)
+TYPE_SUBTASK = BLUE_FILL_1                  # bleu clair
+TYPE_EPIC = BRAND_PRIMARY                   # bleu foncé (brand)
 TYPE_ANOMALY = RGBColor(0xE6, 0x8A, 0x2E)   # orange
 # Bleu marine, volontairement plus sombre/plus saturé que TYPE_EPIC pour
 # rester distinguable à côté de lui sur {{chart:types}} — remplace l'ancien
@@ -67,7 +77,7 @@ TYPE_ANOMALY = RGBColor(0xE6, 0x8A, 0x2E)   # orange
 # sous-tâche/travaux sur {{chart:conso_corrective}}, voir CLAUDE.md).
 TYPE_WORK = RGBColor(0x0B, 0x2D, 0x4A)      # bleu marine
 TYPE_INCIDENT = RGBColor(0xC0, 0x39, 0x2B)  # rouge
-TYPE_OTHER = RGBColor(0x93, 0xA2, 0xB0)     # gris — type non reconnu
+TYPE_OTHER = TEXT_FOOTER                    # gris — type non reconnu
 
 TICKET_TYPE_COLORS = {
     "User Story": TYPE_US,
@@ -90,7 +100,7 @@ def type_color(type_name):
 
 SYNTH_BG = BRAND_PRIMARY  # slides de synthèse : fond plein bleu
 SYNTH_ACCENT = ORANGE_LIGHT
-SYNTH_RULE = RGBColor(0xFF, 0xFF, 0xFF)  # filet blanc à 14% d'opacité (alpha géré à l'appel)
+SYNTH_RULE = WHITE  # filet blanc à 14% d'opacité (alpha géré à l'appel)
 
 # ---------------------------------------------------------------- police
 FONT_FAMILY = "Aptos"  # fallback Calibri géré par PowerPoint si Aptos absent

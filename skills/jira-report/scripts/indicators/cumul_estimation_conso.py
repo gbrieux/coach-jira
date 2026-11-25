@@ -30,7 +30,7 @@ from datetime import timedelta, timezone
 from datetime import datetime as _datetime
 
 import render_agile
-from indicators.common import filter_issues, parse_dt, to_float
+from indicators.common import EPIC_TYPE, filter_issues, parse_dt, to_float
 
 RENDERERS = {"cumul_estimation_conso": render_agile.render_cumul_estimation_conso}
 
@@ -49,7 +49,7 @@ def compute(issues, sprints, conf):
             continue
         day = created.date()
         itype = (f.get("issuetype") or {}).get("name", "")
-        if itype == "Epic":
+        if itype == EPIC_TYPE:
             epic_estimate_by_day[day] = (
                 epic_estimate_by_day.get(day, 0.0) + to_float(f.get("timeoriginalestimate")) / spd
             )

@@ -9,8 +9,8 @@ et `.env` ci-dessous sont dans le répertoire de données, pas dans ce dossier �
 voir `SKILL.md`.
 
 0. **Répertoire de données absent ?** Si `resolve_context.py` échoue avec
-   `DataDirNotConfigured` : demander à l'utilisateur où le créer, lancer
-   `python scripts/bootstrap.py <chemin_choisi>`, puis reprendre à l'étape 1.
+   `DataDirNotConfigured` : suivre `SKILL.md`, section « Première utilisation
+   (bootstrap) », puis reprendre à l'étape 1.
 
 1. **Résoudre le contexte.**
    ```bash
@@ -35,6 +35,6 @@ voir `SKILL.md`.
 
 4. **Si la réponse fait ressortir un fait qui mériterait d'être conservé** pour les
    prochaines analyses de cette équipe, suivre la section « Proposer un ajout de
-   contexte » de `COACH_PROMPT.md` : proposer le bloc exact, attendre une
-   confirmation explicite, puis seulement `python scripts/append_context.py
-   <team_id> <bloc_utf8.md>`. Jamais d'écriture sans confirmation.
+   contexte » de `COACH_PROMPT.md` (proposer le bloc exact, attendre une
+   confirmation explicite, puis seulement `append_context.py`). Jamais
+   d'écriture sans confirmation.

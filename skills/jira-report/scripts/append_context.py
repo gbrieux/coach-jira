@@ -2,10 +2,10 @@
 """Ajoute un bloc de contexte horodaté en fin de contexte/<team_id>.md.
 
 Usage:
-    python scripts/append_context.py NOS bloc_utf8.md
+    python scripts/append_context.py <team_id> bloc_utf8.md
 
 ``bloc_utf8.md`` contient le bloc déjà formaté et horodaté par l'appelant
-(ex. ``## 2026-08-06 — Priorisation NOS_R2\n\nContenu...``) — ce script ne
+(ex. ``## 2026-08-06 — Priorisation PRJ_R2\n\nContenu...``) — ce script ne
 devine ni ne génère de date, il se contente d'ajouter tel quel.
 
 Toujours en fin de fichier (append strict, jamais de réécriture de
@@ -16,15 +16,16 @@ respectée en amont par l'appelant (voir CLAUDE.md / COACH_PROMPT.md), pas
 quelque chose que ce script peut vérifier.
 """
 import argparse
-import re
 import sys
 import tempfile
 from pathlib import Path
 
-from workspace import data_root, DataDirNotConfigured
+from check_coaching import encoding_damage
+from util import die
+from workspace import contexte_dir, DataDirNotConfigured
 
 try:
-    CONTEXTE_DIR = data_root() / "contexte"
+    CONTEXTE_DIR = contexte_dir()
 except DataDirNotConfigured as e:
     print(f"ERREUR: {e}", file=sys.stderr)
     sys.exit(1)
@@ -34,19 +35,12 @@ sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
 
 
-def die(msg):
-    print(f"ERREUR: {msg}", file=sys.stderr)
-    sys.exit(1)
-
-
 def validate_utf8(text):
-    """Même heuristique anti-corruption que set_coaching.py : des '?' ou
-    caractères de remplacement suspects trahissent un encodage cassé en
-    amont (ex. $OutputEncoding=us-ascii sous PowerShell)."""
-    replacement_chars = text.count("�")
-    embedded_question_mark = bool(re.search(r"[^\W\d_]\?[^\W\d_]", text, re.UNICODE))
-    question_marks = text.count("?")
-    if replacement_chars or embedded_question_mark or question_marks > 3:
+    """Même heuristique anti-corruption que set_coaching.py/build_ppt.py
+    (check_coaching.encoding_damage) : des '?' ou caractères de
+    remplacement suspects trahissent un encodage cassé en amont (ex.
+    $OutputEncoding=us-ascii sous PowerShell)."""
+    if encoding_damage(text):
         die("le bloc contient des '?' suspects ou des caractères de remplacement ; "
             "vérifier que le fichier source est réellement encodé en UTF-8.")
 

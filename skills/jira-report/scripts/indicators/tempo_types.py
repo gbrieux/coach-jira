@@ -29,23 +29,9 @@ from datetime import timezone
 from datetime import datetime as _datetime
 
 import render_agile
-from indicators.common import filter_issues, parse_dt, ticket_types
+from indicators.common import filter_issues, month_key, month_range, parse_dt, ticket_types
 
 RENDERERS = {"tempo_types": render_agile.render_tempo_types}
-
-
-def _month_key(dt):
-    return (dt.year, dt.month)
-
-
-def _month_range(start, end):
-    y, m = start
-    out = []
-    while (y, m) <= end:
-        out.append((y, m))
-        m = m + 1 if m < 12 else 1
-        y = y if m > 1 else y + 1
-    return out
 
 
 def compute(issues, sprints, conf):
@@ -70,18 +56,18 @@ def compute(issues, sprints, conf):
         if filtered and str(w.get("issue_id")) not in type_by_issue:
             continue
         itype = type_by_issue.get(str(w.get("issue_id")), "Inconnu")
-        by_month[_month_key(dt)][itype] += (w.get("seconds") or 0) / spd
+        by_month[month_key(dt)][itype] += (w.get("seconds") or 0) / spd
 
     if not by_month:
         return {"tempo_types": None}
 
     start_cfg = parse_dt(conf.get("sprint_start_date"))
-    start = _month_key(start_cfg) if start_cfg else min(by_month)
-    end = _month_key(_datetime.now(timezone.utc))
+    start = month_key(start_cfg) if start_cfg else min(by_month)
+    end = month_key(_datetime.now(timezone.utc))
     if start > end:
         return {"tempo_types": None}
 
-    months = _month_range(start, end)
+    months = month_range(start, end)
 
     types_total = defaultdict(float)
     for month_data in by_month.values():

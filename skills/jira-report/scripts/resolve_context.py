@@ -2,8 +2,8 @@
 """Résout le contexte qualitatif (équipe) d'un projet ou d'une équipe.
 
 Usage:
-    python scripts/resolve_context.py NOS_R1      # clé de projects/<clé>/project.yaml
-    python scripts/resolve_context.py NOS         # team_id directement
+    python scripts/resolve_context.py PRJ_R1      # clé de projects/<clé>/project.yaml
+    python scripts/resolve_context.py EQUIPE      # team_id directement
 
 Résolution : argument → clé de projet (team_id associé, lu dans
 projects/<clé>/project.yaml) ; si aucune clé ne correspond, l'argument est
@@ -20,7 +20,8 @@ import argparse
 import json
 import sys
 
-from workspace import data_root, list_project_keys, load_project_config, DataDirNotConfigured
+from workspace import contexte_dir, data_root, list_project_keys, load_project_config, organisation_path, DataDirNotConfigured
+from util import die
 
 # Sortie/erreurs toujours en UTF-8 quel que soit le codepage de la console
 # (le contexte peut contenir des symboles absents de cp1252, ex. ≤/≥).
@@ -28,17 +29,11 @@ sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
 
 
-def die(msg):
-    print(f"ERREUR: {msg}", file=sys.stderr)
-    sys.exit(1)
-
-
 try:
     DATA_ROOT = data_root()
+    CONTEXTE_DIR = contexte_dir()
 except DataDirNotConfigured as e:
     die(str(e))
-
-CONTEXTE_DIR = DATA_ROOT / "contexte"
 
 
 def resolve(arg):
@@ -64,7 +59,7 @@ def resolve(arg):
             die(f"'{arg}' n'est ni une clé de projet connue, ni un team_id "
                 f"connu ({team_path} introuvable).")
 
-    org_path = CONTEXTE_DIR / "organisation.md"
+    org_path = organisation_path()
     if not org_path.exists():
         die(f"{org_path} introuvable — ce fichier est requis "
             "(contexte transverse toujours lu, pour que l'analyse soit identique "

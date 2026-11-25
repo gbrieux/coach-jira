@@ -27,16 +27,12 @@ versionné dans git, voir SKILL.md).
 import argparse
 import copy
 import re
-import sys
 
 from pptx import Presentation
 
+from util import die
+
 PAGE_NUM_RE = re.compile(r"^\d+$")
-
-
-def die(msg):
-    print(f"ERREUR: {msg}", file=sys.stderr)
-    sys.exit(1)
 
 
 def find_slide_with_text(prs, needle):

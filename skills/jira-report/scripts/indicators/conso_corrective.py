@@ -34,7 +34,7 @@ from datetime import timezone
 from datetime import datetime as _datetime
 
 import render_agile
-from indicators.common import filter_issues, parse_dt, to_float
+from indicators.common import filter_issues, month_key, month_range, parse_dt, to_float
 
 RENDERERS = {"conso_corrective": render_agile.render_conso_corrective}
 
@@ -57,20 +57,6 @@ def _category(itype, conf):
     return None
 
 
-def _month_key(dt):
-    return (dt.year, dt.month)
-
-
-def _month_range(start, end):
-    y, m = start
-    out = []
-    while (y, m) <= end:
-        out.append((y, m))
-        m = m + 1 if m < 12 else 1
-        y = y if m > 1 else y + 1
-    return out
-
-
 def compute(issues, sprints, conf):
     done_statuses = set(conf["done_statuses"])
     spd = conf["seconds_per_day"]
@@ -86,18 +72,18 @@ def compute(issues, sprints, conf):
         resolved = parse_dt(f.get("resolutiondate"))
         if resolved is None:
             continue
-        by_month[_month_key(resolved)][cat] += to_float(f.get("timespent")) / spd
+        by_month[month_key(resolved)][cat] += to_float(f.get("timespent")) / spd
 
     if not by_month:
         return {"conso_corrective": None}
 
     start_cfg = parse_dt(conf.get("sprint_start_date"))
-    start = _month_key(start_cfg) if start_cfg else min(by_month)
-    end = _month_key(_datetime.now(timezone.utc))
+    start = month_key(start_cfg) if start_cfg else min(by_month)
+    end = month_key(_datetime.now(timezone.utc))
     if start > end:
         return {"conso_corrective": None}
 
-    months = _month_range(start, end)
+    months = month_range(start, end)
     series = {cat: [round(by_month.get(mk, {}).get(cat, 0.0), 2) for mk in months] for cat in CATEGORIES}
     totals_jh = {cat: round(sum(series[cat]), 1) for cat in CATEGORIES}
     total_jh = round(sum(totals_jh.values()), 1)

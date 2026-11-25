@@ -6,13 +6,13 @@ converties en EMU via style.px() — jamais de valeur brute EMU/Inches ici.
 """
 import math
 import re
-from datetime import datetime, timezone
+from datetime import datetime
 
 from lxml import etree
 from pptx.chart.data import CategoryChartData
 from pptx.dml.color import RGBColor
 from pptx.enum.chart import (XL_CHART_TYPE, XL_LABEL_POSITION, XL_LEGEND_POSITION,
-                              XL_MARKER_STYLE, XL_TICK_LABEL_POSITION)
+                              XL_MARKER_STYLE)
 from pptx.enum.dml import MSO_LINE_DASH_STYLE
 from pptx.enum.shapes import MSO_SHAPE, PP_PLACEHOLDER
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
@@ -96,7 +96,7 @@ def _set_manual_plot_area(chart, x_frac, y_frac, w_frac, h_frac):
     (python-pptx n'expose pas la zone de tracé réellement calculée par
     PowerPoint, donc on la fixe nous-mêmes)."""
     plot_area = chart._chartSpace.find(qn("c:chart")).find(qn("c:plotArea"))
-    layout_xml = f'''<c:layout xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+    layout_xml = f'''<c:layout xmlns:c="{C_NS}">
   <c:manualLayout>
     <c:layoutTarget val="inner"/>
     <c:xMode val="edge"/><c:yMode val="edge"/>
@@ -115,7 +115,7 @@ def _delete_legend_entries(chart, indices):
     legend = chart._chartSpace.find(qn("c:chart")).find(qn("c:legend"))
     if legend is None:
         return
-    ns = "http://schemas.openxmlformats.org/drawingml/2006/chart"
+    ns = C_NS
     for idx in indices:
         entry = etree.fromstring(
             f'<c:legendEntry xmlns:c="{ns}"><c:idx val="{idx}"/><c:delete val="1"/></c:legendEntry>'.encode("utf-8")
@@ -372,8 +372,8 @@ def render_burnup(slide, placeholder_shape, data, template_path, page_num, total
         _delete_legend_entries(chart, [2, 3, 4])
 
     _add_secondary_axis(chart, categories, [
-        ("Périmètre cumulé (SP)", br["scope_cumul_sp"], "7FB2CE", 3, "dash"),
-        ("Terminé cumulé (SP)", br["done_cumul_sp"], "F9A48C", 3, "dash"),
+        ("Périmètre cumulé (SP)", br["scope_cumul_sp"], S.BLUE_FILL_1, 3, "dash"),
+        ("Terminé cumulé (SP)", br["done_cumul_sp"], S.ORANGE_LIGHT, 3, "dash"),
     ])
 
     chart.has_legend = True
@@ -657,7 +657,7 @@ def render_burndown(slide, placeholder_shape, data, template_path, page_num, tot
         series.marker.style = XL_MARKER_STYLE.CIRCLE
         series.marker.size = 6
         series.marker.format.fill.solid()
-        series.marker.format.fill.fore_color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+        series.marker.format.fill.fore_color.rgb = S.MARKER_FILL
         series.marker.format.line.color.rgb = S.BRAND_ACCENT
 
         last_idx = max(i for i, v in enumerate(bd["real"]) if v is not None)
@@ -675,15 +675,15 @@ def render_burndown(slide, placeholder_shape, data, template_path, page_num, tot
 
         # Aire sous la courbe « Réel » à 9 % d'opacité (combo, derrière la ligne)
         area_idx = _add_combo_area(chart, "Reste à faire (US)", bd["categories"], bd["real"],
-                                    "F04E23", 9)
+                                    S.BRAND_ACCENT, 9)
         _delete_legend_entries(chart, [area_idx])
 
         _add_combo_line(chart, "Droite idéale", bd["categories"], bd["ideal"],
-                         "1F4E79", 2.25, dash="dash")
+                         S.BRAND_PRIMARY, 2.25, dash="dash")
 
         _add_secondary_axis(chart, bd["categories"], [
-            ("Reste à faire (SP)", bd["real_sp"], "F9A48C", 3, None),
-            ("Droite idéale (SP)", bd["ideal_sp"], "7FB2CE", 2.25, "dash"),
+            ("Reste à faire (SP)", bd["real_sp"], S.ORANGE_LIGHT, 3, None),
+            ("Droite idéale (SP)", bd["ideal_sp"], S.BLUE_FILL_1, 2.25, "dash"),
         ])
 
         chart.has_legend = True
@@ -780,7 +780,7 @@ def _render_burndown_single_unit(slide, placeholder_shape, data, template_path, 
         series.marker.style = XL_MARKER_STYLE.CIRCLE
         series.marker.size = 6
         series.marker.format.fill.solid()
-        series.marker.format.fill.fore_color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+        series.marker.format.fill.fore_color.rgb = S.MARKER_FILL
         series.marker.format.line.color.rgb = S.BRAND_ACCENT
 
         last_idx = max(i for i, v in enumerate(bd[real_key]) if v is not None)
@@ -795,11 +795,11 @@ def _render_burndown_single_unit(slide, placeholder_shape, data, template_path, 
 
         # Aire sous la courbe « Réel » à 9 % d'opacité (combo, derrière la ligne)
         area_idx = _add_combo_area(chart, f"Reste à faire ({unit_label})", bd["categories"], bd[real_key],
-                                    "F04E23", 9)
+                                    S.BRAND_ACCENT, 9)
         _delete_legend_entries(chart, [area_idx])
 
         _add_combo_line(chart, "Droite idéale", bd["categories"], bd[ideal_key],
-                         "1F4E79", 2.25, dash="dash")
+                         S.BRAND_PRIMARY, 2.25, dash="dash")
 
         chart.has_legend = True
         chart.legend.position = XL_LEGEND_POSITION.BOTTOM
@@ -930,13 +930,13 @@ def render_velocity(slide, placeholder_shape, data, template_path, page_num, tot
     cat_ax.tick_labels.font.color.rgb = S.TEXT_FOOTER
 
     _add_secondary_axis(chart, cats, [
-        ("Engagé (SP)", sp_engaged_vals, "7FB2CE", 2.5, "dash"),
-        ("Terminé (SP)", sp_done_vals, "F9A48C", 2.5, None),
+        ("Engagé (SP)", sp_engaged_vals, S.BLUE_FILL_1, 2.5, "dash"),
+        ("Terminé (SP)", sp_done_vals, S.ORANGE_LIGHT, 2.5, None),
     ])
 
     median = m["median_velocity_us"]
     if median and ymax:
-        _add_combo_line(chart, "Médiane", cats, [median] * len(cats), "1F4E79", 1.5, dash="dash")
+        _add_combo_line(chart, "Médiane", cats, [median] * len(cats), S.BRAND_PRIMARY, 1.5, dash="dash")
         _delete_legend_entries(chart, [50])
         plot_y0 = S.CONTENT_Y + S.CONTENT_H * y_frac
         plot_h = S.CONTENT_H * h_frac
@@ -1055,7 +1055,7 @@ def _render_velocity_single_unit(slide, placeholder_shape, data, template_path, 
 
     median = m["median_velocity_us"] if unit == "us" else m["median_velocity_sp"]
     if median and ymax:
-        _add_combo_line(chart, "Médiane", cats, [median] * len(cats), "1F4E79", 1.5, dash="dash")
+        _add_combo_line(chart, "Médiane", cats, [median] * len(cats), S.BRAND_PRIMARY, 1.5, dash="dash")
         _delete_legend_entries(chart, [50])
         plot_y0 = S.CONTENT_Y + S.CONTENT_H * y_frac
         plot_h = S.CONTENT_H * h_frac
@@ -2095,6 +2095,32 @@ def render_cumul_estimation_conso(slide, placeholder_shape, data, template_path,
 
 
 # ==================================================================== epics
+def _set_table_cell(cell, text, bold=False, color=S.TEXT_PRIMARY, fill=None, align=PP_ALIGN.LEFT,
+                    size=S.SIZE_TABLE_CELL, margin_px=20, word_wrap=None):
+    """Remplit une cellule de tableau natif (police charte, marges horizontales,
+    centrage vertical, fond optionnel) — partagé par {{liste_epics}} et
+    {{liste_sprints}}. `word_wrap=None` laisse le réglage par défaut."""
+    cell.margin_left = S.px(margin_px)
+    cell.margin_right = S.px(margin_px)
+    cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+    if fill is None:
+        cell.fill.background()
+    else:
+        cell.fill.solid()
+        cell.fill.fore_color.rgb = fill
+    cell.text_frame.clear()
+    if word_wrap is not None:
+        cell.text_frame.word_wrap = word_wrap
+    p = cell.text_frame.paragraphs[0]
+    p.alignment = align
+    run = p.add_run()
+    run.text = text
+    run.font.size = size
+    run.font.bold = bold
+    run.font.name = S.FONT_FAMILY
+    run.font.color.rgb = color
+
+
 EPIC_TABLE_HEADERS = ["ID", "Libellé", "Statut", "Estim. EPIC initiale", "Conso", "RAF théo",
                       "US term.", "US restantes", "% avanc."]
 EPIC_TABLE_COL_FRACS = [0.09, 0.27, 0.11, 0.10, 0.10, 0.10, 0.08, 0.08, 0.07]
@@ -2236,25 +2262,8 @@ def render_epics(slide, placeholder_shape, data, template_path, page_num, total_
 
     def set_cell(r, c, text, bold=False, color=S.TEXT_PRIMARY, fill=None, align=PP_ALIGN.LEFT,
                  size=Pt(11)):
-        cell = table.cell(r, c)
-        cell.margin_left = S.px(14)
-        cell.margin_right = S.px(14)
-        cell.vertical_anchor = MSO_ANCHOR.MIDDLE
-        if fill is None:
-            cell.fill.background()
-        else:
-            cell.fill.solid()
-            cell.fill.fore_color.rgb = fill
-        cell.text_frame.clear()
-        cell.text_frame.word_wrap = True
-        p = cell.text_frame.paragraphs[0]
-        p.alignment = align
-        run = p.add_run()
-        run.text = text
-        run.font.size = size
-        run.font.bold = bold
-        run.font.name = S.FONT_FAMILY
-        run.font.color.rgb = color
+        _set_table_cell(table.cell(r, c), text, bold=bold, color=color, fill=fill, align=align,
+                        size=size, margin_px=14, word_wrap=True)
 
     for c, h in enumerate(EPIC_TABLE_HEADERS):
         align = PP_ALIGN.LEFT if c < 3 else PP_ALIGN.RIGHT
@@ -2262,7 +2271,7 @@ def render_epics(slide, placeholder_shape, data, template_path, page_num, total_
 
     for i, e in enumerate(shown):
         r = i + 1
-        row_fill = RGBColor(0xFF, 0xFF, 0xFF) if i % 2 == 0 else RGBColor(0xFA, 0xFC, 0xFD)
+        row_fill = S.TABLE_ROW_BG if i % 2 == 0 else S.TABLE_ROW_ALT_BG
         pct = e["avancement_pct"]
         pct_color = SUCCESS_GREEN if pct >= 90 else S.TEXT_PRIMARY
         raf_color = S.BRAND_ACCENT if e["raf_theo_jh"] < 0 else S.TEXT_PRIMARY
@@ -2287,7 +2296,7 @@ def render_epics(slide, placeholder_shape, data, template_path, page_num, total_
         rest_remaining = sum(e["us_remaining"] for e in rest)
         rest_total = rest_done + rest_remaining
         rest_pct = round(100 * rest_done / rest_total, 1) if rest_total else 0.0
-        row_fill = RGBColor(0xF4, 0xF7, 0xFA)
+        row_fill = S.TABLE_ROW_SUMMARY_BG
         set_cell(r, 0, "—", color=S.TEXT_FOOTER, fill=row_fill)
         set_cell(r, 1, f"{len(rest)} autres EPICs ({preview})", color=S.TEXT_SECONDARY, fill=row_fill)
         set_cell(r, 2, "—", color=S.TEXT_FOOTER, fill=row_fill)
@@ -2303,7 +2312,7 @@ def render_epics(slide, placeholder_shape, data, template_path, page_num, total_
 
     if no_epic:
         r = n_rows - 1
-        row_fill = RGBColor(0xF4, 0xF7, 0xFA)
+        row_fill = S.TABLE_ROW_SUMMARY_BG
         set_cell(r, 0, "—", color=S.TEXT_FOOTER, fill=row_fill)
         set_cell(r, 1, f"Sans EPIC ({no_epic['ticket_count']} tickets)", color=S.TEXT_SECONDARY, fill=row_fill)
         set_cell(r, 2, "—", color=S.TEXT_FOOTER, fill=row_fill)
@@ -2688,7 +2697,7 @@ def render_defauts_tendance(slide, placeholder_shape, data, template_path, page_
         val_ax.tick_labels.font.color.rgb = S.TEXT_FOOTER
         val_ax.format.line.fill.background()
 
-        _add_secondary_axis(chart, cats_i, [("Stock ouvert", stock_i, "1F4E79", 2.5, None)])
+        _add_secondary_axis(chart, cats_i, [("Stock ouvert", stock_i, S.BRAND_PRIMARY, 2.5, None)])
 
         chart.has_legend = True
         chart.legend.position = XL_LEGEND_POSITION.BOTTOM
@@ -2998,7 +3007,7 @@ def render_tempo_conso(slide, placeholder_shape, data, template_path, page_num, 
     val_ax.format.line.fill.background()
 
     _add_secondary_axis(chart, cats, [
-        ("US terminées", tc["done_us"], "F04E23", 2.5, None),
+        ("US terminées", tc["done_us"], S.BRAND_ACCENT, 2.5, None),
     ])
 
     chart.has_legend = True
@@ -3871,24 +3880,8 @@ def render_sprint_table(slide, placeholder_shape, data, template_path, page_num,
 
     def set_cell(r, c, text, bold=False, color=S.TEXT_PRIMARY, fill=None, align=PP_ALIGN.LEFT,
                  size=S.SIZE_TABLE_CELL):
-        cell = table.cell(r, c)
-        cell.margin_left = S.px(20)
-        cell.margin_right = S.px(20)
-        cell.vertical_anchor = MSO_ANCHOR.MIDDLE
-        if fill is None:
-            cell.fill.background()
-        else:
-            cell.fill.solid()
-            cell.fill.fore_color.rgb = fill
-        cell.text_frame.clear()
-        p = cell.text_frame.paragraphs[0]
-        p.alignment = align
-        run = p.add_run()
-        run.text = text
-        run.font.size = size
-        run.font.bold = bold
-        run.font.name = S.FONT_FAMILY
-        run.font.color.rgb = color
+        _set_table_cell(table.cell(r, c), text, bold=bold, color=color, fill=fill, align=align,
+                        size=size, margin_px=20)
 
     for c, h in enumerate(SPRINT_TABLE_HEADERS):
         align = PP_ALIGN.LEFT if c < 2 else PP_ALIGN.RIGHT
@@ -3896,8 +3889,8 @@ def render_sprint_table(slide, placeholder_shape, data, template_path, page_num,
 
     def render_row(r, b, zebra=0):
         is_current = b is rows_all[-1]
-        row_fill = RGBColor(0xF0, 0xF6, 0xFA) if is_current else (
-            RGBColor(0xFF, 0xFF, 0xFF) if zebra % 2 == 0 else RGBColor(0xFA, 0xFC, 0xFD))
+        row_fill = S.TABLE_ROW_CURRENT_BG if is_current else (
+            S.TABLE_ROW_BG if zebra % 2 == 0 else S.TABLE_ROW_ALT_BG)
         text_color = S.BRAND_PRIMARY if is_current else S.TEXT_PRIMARY
         bold = is_current
 
@@ -3918,9 +3911,9 @@ def render_sprint_table(slide, placeholder_shape, data, template_path, page_num,
         set_cell(r, 7, f"{_fr_num(b.get('conso_cumul_us_jh', 0))} jh", color=text_color, fill=row_fill, align=PP_ALIGN.RIGHT, bold=bold)
 
     def render_ellipsis(r):
-        set_cell(r, 0, "…", color=S.TEXT_FOOTER, fill=RGBColor(0xFF, 0xFF, 0xFF))
+        set_cell(r, 0, "…", color=S.TEXT_FOOTER, fill=S.TABLE_ROW_BG)
         for c in range(1, len(SPRINT_TABLE_HEADERS)):
-            set_cell(r, c, "", fill=RGBColor(0xFF, 0xFF, 0xFF))
+            set_cell(r, c, "", fill=S.TABLE_ROW_BG)
 
     if truncated and has_sprint0:
         render_row(1, rows[0], zebra=0)

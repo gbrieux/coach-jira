@@ -46,12 +46,6 @@ def test_worklog_without_matching_issue_is_classed_inconnu():
     assert out["series"]["Inconnu"][jan] == 1.0
 
 
-def test_month_range_wraps_year():
-    assert tempo_types._month_range((2025, 11), (2026, 2)) == [
-        (2025, 11), (2025, 12), (2026, 1), (2026, 2)
-    ]
-
-
 def test_no_matching_worklogs_returns_none():
     conf = _conf(tempo_worklogs=[])
     assert tempo_types.compute([], [], conf)["tempo_types"] is None

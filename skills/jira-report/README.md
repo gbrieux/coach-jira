@@ -27,10 +27,10 @@ projet = un JQL = un PPT.
 
 ```bash
 python scripts/inspect_template.py          # vérifier les placeholders du template
-python scripts/fetch_jira.py LMA            # extraire les données -> projects/LMA/output/data.json
-python scripts/build_ppt.py LMA             # générer -> projects/LMA/output/<AAAAMMJJ>-indicateurs.pptx
+python scripts/fetch_jira.py PRJ            # extraire les données -> projects/PRJ/output/data.json
+python scripts/build_ppt.py PRJ             # générer -> projects/PRJ/output/<AAAAMMJJ>-PRJ-indicateurs.pptx
 # ou tout d'un coup :
 python scripts/fetch_jira.py --all && python scripts/build_ppt.py --all
 ```
 
-Dans Claude Code ou Codex : « génère le PPT d'indicateurs du projet LMA » suffit.
+Dans Claude Code ou Codex : « génère le PPT d'indicateurs du projet PRJ » suffit.

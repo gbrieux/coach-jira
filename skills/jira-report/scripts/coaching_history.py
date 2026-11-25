@@ -24,7 +24,8 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from workspace import output_dir, DataDirNotConfigured
+from workspace import coaching_history_path, data_json_path, DataDirNotConfigured
+from util import die
 
 MAX_ENTRIES = 12
 
@@ -33,14 +34,9 @@ sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
 
 
-def die(msg):
-    print(f"ERREUR: {msg}", file=sys.stderr)
-    sys.exit(1)
-
-
 def _history_path(key) -> Path:
     try:
-        return output_dir(key) / "coaching_history.json"
+        return coaching_history_path(key)
     except DataDirNotConfigured as e:
         die(str(e))
 
@@ -71,7 +67,7 @@ def _write_history(path: Path, entries: list):
 
 
 def cmd_archive(key):
-    data_path = output_dir(key) / "data.json"
+    data_path = data_json_path(key)
     if not data_path.exists():
         die(f"fichier de données absent : {data_path}")
     data = json.loads(data_path.read_text(encoding="utf-8"))

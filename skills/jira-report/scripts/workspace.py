@@ -22,6 +22,18 @@ SKILL_ROOT = Path(__file__).resolve().parent.parent
 POINTER_FILE = SKILL_ROOT / ".data-dir-path"
 SCAFFOLD_DIR = SKILL_ROOT / "scaffold"
 
+# Arborescence du répertoire de données — seul endroit où ces noms sont écrits.
+PROJECTS_DIRNAME = "projects"
+CONTEXTE_DIRNAME = "contexte"
+TEMPLATES_DIRNAME = "templates"
+OUTPUT_DIRNAME = "output"
+PROJECT_CONFIG_FILENAME = "project.yaml"
+ORGANISATION_FILENAME = "organisation.md"
+TEMPLATE_FILENAME = "template.pptx"
+DATA_FILENAME = "data.json"
+COACHING_HISTORY_FILENAME = "coaching_history.json"
+REPORT_SUFFIX = "-indicateurs.pptx"
+
 
 class DataDirNotConfigured(RuntimeError):
     def __init__(self):
@@ -65,17 +77,16 @@ def bootstrap(path) -> Path:
         )
 
     root = Path(path).expanduser().resolve()
-    (root / "projects").mkdir(parents=True, exist_ok=True)
-    (root / "contexte").mkdir(parents=True, exist_ok=True)
-    (root / "templates").mkdir(parents=True, exist_ok=True)
+    for dirname in (PROJECTS_DIRNAME, CONTEXTE_DIRNAME, TEMPLATES_DIRNAME):
+        (root / dirname).mkdir(parents=True, exist_ok=True)
 
-    org_md = root / "contexte" / "organisation.md"
+    org_md = root / CONTEXTE_DIRNAME / ORGANISATION_FILENAME
     if not org_md.exists():
         shutil.copy2(SCAFFOLD_DIR / "organisation.example.md", org_md)
 
-    template = root / "templates" / "template.pptx"
+    template = root / TEMPLATES_DIRNAME / TEMPLATE_FILENAME
     if not template.exists():
-        shutil.copy2(SCAFFOLD_DIR / "template.pptx", template)
+        shutil.copy2(SCAFFOLD_DIR / TEMPLATE_FILENAME, template)
 
     env_file = root / ".env"
     if not env_file.exists():
@@ -85,17 +96,21 @@ def bootstrap(path) -> Path:
     return root
 
 
+def projects_root() -> Path:
+    return data_root() / PROJECTS_DIRNAME
+
+
 def list_project_keys() -> list[str]:
-    proj_root = data_root() / "projects"
+    proj_root = projects_root()
     if not proj_root.is_dir():
         return []
-    return sorted(p.parent.name for p in proj_root.glob("*/project.yaml"))
+    return sorted(p.parent.name for p in proj_root.glob(f"*/{PROJECT_CONFIG_FILENAME}"))
 
 
 def load_project_config(key: str) -> dict:
     import yaml
 
-    p = data_root() / "projects" / key / "project.yaml"
+    p = project_dir(key) / PROJECT_CONFIG_FILENAME
     if not p.exists():
         raise FileNotFoundError(
             f"{p} introuvable. Projets disponibles : {', '.join(list_project_keys()) or '(aucun)'}"
@@ -104,14 +119,48 @@ def load_project_config(key: str) -> dict:
 
 
 def project_dir(key: str) -> Path:
-    return data_root() / "projects" / key
+    return projects_root() / key
 
 
 def output_dir(key: str) -> Path:
-    d = project_dir(key) / "output"
+    d = project_dir(key) / OUTPUT_DIRNAME
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
+def data_json_path(key: str) -> Path:
+    """projects/<clé>/output/data.json — écrit par fetch_jira.py, enrichi par
+    set_coaching.py, lu par build_ppt.py et coaching_history.py."""
+    return output_dir(key) / DATA_FILENAME
+
+
+def report_path(key: str, date_prefix: str) -> Path:
+    """projects/<clé>/output/<AAAAMMJJ>-<clé>-indicateurs.pptx — PPT généré
+    par build_ppt.py (date = `generated_at` des données)."""
+    return output_dir(key) / f"{date_prefix}-{key}{REPORT_SUFFIX}"
+
+
+def latest_report(key: str) -> Path | None:
+    """PPT généré le plus récent du projet, ou None. Plusieurs fichiers datés
+    peuvent coexister (et l'ancien format <AAAAMMJJ>-indicateurs.pptx dans
+    certains dossiers) : tri sur le préfixe date, puis sur la date de
+    modification pour départager deux formats du même jour."""
+    candidates = sorted(output_dir(key).glob(f"*{REPORT_SUFFIX}"),
+                        key=lambda p: (p.name[:8], p.stat().st_mtime), reverse=True)
+    return candidates[0] if candidates else None
+
+
+def coaching_history_path(key: str) -> Path:
+    return output_dir(key) / COACHING_HISTORY_FILENAME
+
+
+def contexte_dir() -> Path:
+    return data_root() / CONTEXTE_DIRNAME
+
+
+def organisation_path() -> Path:
+    return contexte_dir() / ORGANISATION_FILENAME
+
+
 def template_path() -> Path:
-    return data_root() / "templates" / "template.pptx"
+    return data_root() / TEMPLATES_DIRNAME / TEMPLATE_FILENAME

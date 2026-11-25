@@ -17,6 +17,7 @@ Importable depuis set_coaching.py : `validate_coaching(coaching) ->
 """
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -161,6 +162,36 @@ def validate_coaching(coaching):
                     errors.append(_len_msg(f"questions[{i}]", q, QUESTIONS_MAX))
 
     return errors, warnings
+
+
+def iter_text_values(value):
+    """Parcourt récursivement les chaînes (clés comprises) d'une structure JSON."""
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            yield from iter_text_values(key)
+            yield from iter_text_values(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from iter_text_values(item)
+
+
+def encoding_damage(coaching):
+    """Détecte un coaching probablement corrompu par l'encodage (Windows
+    PowerShell 5.1 : ``$OutputEncoding=us-ascii`` transforme les accents en
+    ``?`` avant que Python ne reçoive le texte). Renvoie
+    ``(question_marks, replacement_chars)`` si suspect, sinon None — source
+    unique de l'heuristique, partagée par set_coaching.py et build_ppt.py."""
+    texts = list(iter_text_values(coaching))
+    replacement_chars = sum(text.count("�") for text in texts)
+    question_marks = sum(text.count("?") for text in texts)
+    embedded_question_mark = any(
+        re.search(r"[^\W\d_]\?[^\W\d_]", text, re.UNICODE) for text in texts
+    )
+    if replacement_chars or embedded_question_mark or question_marks > 3:
+        return question_marks, replacement_chars
+    return None
 
 
 def load_coaching(path: Path):

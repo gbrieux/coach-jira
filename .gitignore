@@ -1,6 +1,7 @@
-# Ce dépôt est le répertoire de données privé (jamais publié) — voir CLAUDE.md.
-# project.yaml et contexte/*.md restent versionnés ici (historique utile),
-# seuls les secrets et les fichiers générés sont ignorés.
+# Ce dépôt sert aussi de répertoire de données du skill — voir CLAUDE.md.
+# Les données privées (projects/, contexte/, templates/, .env) restent locales
+# au poste et ne sont jamais versionnées ; seul le code (skill, commandes,
+# scripts) l'est.
 
 .env
 projects

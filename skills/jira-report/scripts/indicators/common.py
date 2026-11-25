@@ -4,6 +4,10 @@ import circulaire. Exclu de la découverte automatique (voir indicators/__init__
 """
 from datetime import datetime
 
+# Type de ticket JIRA natif (non paramétrable, identique sur toutes les
+# instances) — utilisé par fetch_jira.build_epics et cumul_estimation_conso.
+EPIC_TYPE = "Epic"
+
 
 def to_float(v):
     try:

@@ -19,12 +19,6 @@ def test_categorizes_by_configured_type_lists():
     assert cc._category("Epic", conf) is None
 
 
-def test_month_range_wraps_year():
-    assert cc._month_range((2025, 11), (2026, 2)) == [
-        (2025, 11), (2025, 12), (2026, 1), (2026, 2)
-    ]
-
-
 def test_compute_buckets_conso_by_month_and_category():
     conf = _conf(anomaly_types=["Anomalie"], incident_types=["Incident"],
                  tech_types=["Technical Story"], subtask_types=["Sous-tâche"],

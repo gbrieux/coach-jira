@@ -16,12 +16,13 @@ Chaque module peut exposer, indépendamment l'un de l'autre :
 common.py (préfixé `_`... non, nommé explicitement `common`, exclu de la
 découverte automatique) porte les helpers partagés (parsing de date,
 pourcentiles, etc.) sans dépendre d'aucun module indicateur — à importer
-avec `from indicators.common import ...`.
+avec `from indicators.common import ...`. defaults.py (exclu aussi) porte
+les valeurs par défaut de project.yaml — source unique.
 """
 import importlib
 import pkgutil
 
-_EXCLUDED = {"common"}
+_EXCLUDED = {"common", "defaults"}
 
 
 def all_modules():

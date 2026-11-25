@@ -7,12 +7,14 @@ Racine effective : `skills/jira-report/`. `projects/`, `contexte/`, `templates/`
 et `.env` ci-dessous sont dans le répertoire de données, pas dans ce dossier —
 voir `SKILL.md`.
 
-0. **Répertoire de données absent ?** Si `scripts/fetch_jira.py`/`resolve_context.py`
-   échouent avec `DataDirNotConfigured` (aucun répertoire de données configuré) :
-   demander à l'utilisateur où le créer (ex. un dossier sibling du skill dans son
-   espace de travail — jamais deviné), lancer une seule fois
-   `python scripts/bootstrap.py <chemin_choisi>`, puis reprendre à l'étape 1.
-   Voir `SKILL.md`, section « Première utilisation ».
+**Plusieurs projets ?** Si `$1` est absent ou vaut `--all` : dérouler les étapes
+1 à 4 ci-dessous **une clé à la fois**, pour chaque projet de `projects/` (en
+remplaçant `$1` par la clé) — jamais `fetch_jira.py --all`, qui réécrirait
+tous les `data.json` avant que leur synthèse ait été archivée.
+
+0. **Répertoire de données absent ?** Si un script échoue avec
+   `DataDirNotConfigured` : suivre `SKILL.md`, section « Première utilisation
+   (bootstrap) », puis reprendre à l'étape 1.
 
 1. **Archiver la synthèse précédente — avant tout le reste.** `fetch_jira.py`
    (étape suivante) réécrit `data.json` en entier, ce qui perdrait le `coaching`
@@ -29,43 +31,29 @@ voir `SKILL.md`.
    ```bash
    python scripts/fetch_jira.py $1
    ```
-   (ou `python scripts/fetch_jira.py --all` si `$1` est absent ou vaut `--all` —
-   dans ce cas, répéter l'étape 1 pour chaque projet avant cette étape.)
 
 3. **Résoudre le contexte.**
    ```bash
    python scripts/resolve_context.py $1
    ```
-   Si la commande échoue (team_id absent de `projects/$1/project.yaml`, ou fichier
+   En cas d'échec (team_id absent de `projects/$1/project.yaml`, ou
    `contexte/<team_id>.md` / `contexte/organisation.md` introuvable) : afficher
-   l'erreur telle quelle à l'utilisateur et **s'arrêter là** — les données JIRA
-   restent rafraîchies, mais pas de synthèse écrite sans contexte résolu.
+   l'erreur telle quelle et **s'arrêter là** — les données JIRA restent
+   rafraîchies, mais pas de synthèse écrite sans contexte résolu.
 
-   Si `$1` vaut `--all` ou est absent (refresh multi-projets), répéter les étapes
-   1 à 4 pour chaque projet de `projects/`.
-
-4. **Synthèse coach.** Rédiger le contenu de la clé `coaching` (objet structuré) en
-   suivant `COACH_PROMPT.md`, à partir des données JIRA qui viennent d'être
-   rafraîchies, du contexte résolu à l'étape 3 (`organisation.md` +
-   `contexte/<team_id>.md`), et de la dernière synthèse archivée pour le `delta` :
+4. **Synthèse coach.** Rédiger la clé `coaching` en suivant `COACH_PROMPT.md`, à
+   partir des données JIRA fraîches, du contexte résolu à l'étape 3, et de la
+   dernière synthèse archivée pour le `delta` :
    ```bash
    python scripts/coaching_history.py last $1
    ```
-   (rien s'il n'y a pas encore d'historique — dans ce cas, ne pas produire le
-   champ `delta`, voir COACH_PROMPT.md). Montrer un résumé de ce qui va être écrit
-   n'est pas nécessaire ici (contrairement à un ajout dans `contexte/`) — mais si
-   la rédaction fait ressortir un fait qui mériterait d'être conservé dans le
-   contexte équipe, suivre la section « Proposer un ajout de contexte » de
-   `COACH_PROMPT.md` (proposer, attendre confirmation, jamais écrire en
-   silence). Valider puis écrire la synthèse avec :
-   ```bash
-   python scripts/check_coaching.py <coaching_utf8.json>
-   python scripts/set_coaching.py $1 <coaching_utf8.json>
-   ```
-   `check_coaching.py` vérifie les plafonds/cardinalités (voir COACH_PROMPT.md,
-   « Contraintes de rendu ») avant d'écrire quoi que ce soit — une erreur bloquante
-   veut dire raccourcir le texte, pas forcer l'injection ; `set_coaching.py`
-   applique de toute façon la même validation en interne juste avant d'injecter.
+   (rien s'il n'y a pas encore d'historique — dans ce cas, pas de champ `delta`).
+   Valider puis injecter selon `COACH_PROMPT.md`, section « Écriture du JSON »
+   (`check_coaching.py` puis `set_coaching.py $1 …` — l'archivage y est déjà
+   fait à l'étape 1). Montrer un résumé avant écriture n'est pas nécessaire ici ;
+   en revanche tout fait à conserver dans le contexte équipe suit « Proposer un
+   ajout de contexte » de `COACH_PROMPT.md` (proposer, attendre confirmation,
+   jamais écrire en silence).
 
 Ne pas lancer `build_ppt.py` — cette commande rafraîchit `projects/$1/output/data.json`
 (données + synthèse), rien d'autre. Pour générer le PPT à partir de ce JSON déjà
